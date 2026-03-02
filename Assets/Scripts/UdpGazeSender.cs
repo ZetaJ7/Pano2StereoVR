@@ -18,7 +18,17 @@ namespace Pano2StereoVR
         private UdpClient _udpClient;
         private float _nextSendTime;
 
+        public event Action<int, float> ModeMessageSent;
+
+        public HeadPoseTracker PoseTracker => poseTracker;
         public int CurrentMode { get; private set; }
+        public int LastSentMode { get; private set; } = -1;
+        public float LastModeSentTime { get; private set; } = -1f;
+        public long GazePacketsSent { get; private set; }
+        public long CombinedPacketsSent { get; private set; }
+        public long ModePacketsSent { get; private set; }
+        public long PacketSendErrors { get; private set; }
+        public bool IsConnected => _udpClient != null;
 
         private void Awake()
         {
@@ -95,13 +105,22 @@ namespace Pano2StereoVR
                 u0.y,
                 u0.z
             );
-            SendPayload(payload);
+            if (SendPayload(payload))
+            {
+                GazePacketsSent += 1;
+            }
         }
 
         private void SendModeOnly(int mode)
         {
             string payload = "{\"mode\":" + mode.ToString(CultureInfo.InvariantCulture) + "}";
-            SendPayload(payload);
+            if (SendPayload(payload))
+            {
+                ModePacketsSent += 1;
+                LastSentMode = mode;
+                LastModeSentTime = Time.unscaledTime;
+                ModeMessageSent?.Invoke(mode, LastModeSentTime);
+            }
         }
 
         private void SendGazeAndMode(Vector3 u0, int mode)
@@ -114,24 +133,30 @@ namespace Pano2StereoVR
                 u0.z,
                 mode
             );
-            SendPayload(payload);
+            if (SendPayload(payload))
+            {
+                CombinedPacketsSent += 1;
+            }
         }
 
-        private void SendPayload(string payload)
+        private bool SendPayload(string payload)
         {
             if (_udpClient == null)
             {
-                return;
+                return false;
             }
 
             try
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(payload);
                 _udpClient.Send(bytes, bytes.Length);
+                return true;
             }
             catch (Exception ex)
             {
+                PacketSendErrors += 1;
                 Debug.LogWarning("[UdpGazeSender] send failed: " + ex.Message);
+                return false;
             }
         }
     }

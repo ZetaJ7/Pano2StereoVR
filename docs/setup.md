@@ -45,3 +45,11 @@ python src/pano2stereo.py `
 - No torn frame usage in Unity receiver.
 - Keyboard `1/2/3` changes mode.
 - Python `experiment_log.jsonl` contains `mode_switch` events.
+
+## 6) G3 Acceptance
+
+- Detailed gate-`G3` runbook: `docs/g3_acceptance.md`
+- Includes:
+  - `requested/sent/applied` overlay verification for mode switching
+  - cardinal mapping check using `HeadPoseTracker` debug hotkeys (`F1/F2/F3/F4`)
+  - artifact collection checklist for gate review

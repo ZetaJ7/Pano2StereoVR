@@ -19,12 +19,16 @@ namespace Pano2StereoVR
         private int _framesSinceOpenAttempt;
 
         public event Action<Texture2D, int> FrameUpdated;
+        public event Action<int, ulong, float> ModeApplied;
 
         public Texture2D StereoTexture => _stereoTexture;
         public int CurrentMode { get; private set; } = 3;
+        public float LastModeAppliedTime { get; private set; } = -1f;
+        public int LastAppliedMode { get; private set; } = 3;
         public int Width { get; private set; }
         public int Height { get; private set; }
         public long AcceptedFrames { get; private set; }
+        public long ModeChangesApplied { get; private set; }
         public long WriterBusySkips { get; private set; }
         public long TornRejected { get; private set; }
         public bool IsOpened => _accessor != null;
@@ -112,8 +116,21 @@ namespace Pano2StereoVR
                 _stereoTexture.Apply(false, false);
 
                 _lastSeq = seqBegin;
+                int previousMode = CurrentMode;
                 CurrentMode = (int)mode;
                 AcceptedFrames += 1;
+
+                if (AcceptedFrames == 1 || CurrentMode != previousMode)
+                {
+                    LastAppliedMode = CurrentMode;
+                    LastModeAppliedTime = Time.unscaledTime;
+                    if (AcceptedFrames > 1)
+                    {
+                        ModeChangesApplied += 1;
+                    }
+                    ModeApplied?.Invoke(CurrentMode, seqBegin, LastModeAppliedTime);
+                }
+
                 FrameUpdated?.Invoke(_stereoTexture, CurrentMode);
                 return true;
             }

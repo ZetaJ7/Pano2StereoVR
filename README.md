@@ -1,0 +1,46 @@
+# Pano2StereoVR
+
+Unity OpenXR viewer for VR subjective experiments driven by the `Pano2Stereo` Python pipeline.
+
+## Scope
+
+- Read SBS RGB frames from named shared memory.
+- Render per-eye ERP panorama in HMD.
+- Send `u0` + `mode` control packets over UDP.
+- Keep protocol aligned with `docs/protocol.md` in the Python repo.
+
+## Recommended Unity Version
+
+- `Unity 2022.3 LTS`
+
+## Repository Layout
+
+```
+Pano2StereoVR/
+├── Assets/
+│   ├── Scenes/
+│   ├── Scripts/
+│   └── Shaders/
+├── Packages/
+├── ProjectSettings/
+└── docs/
+```
+
+## Quick Start
+
+1. Open this folder with Unity Hub.
+2. Install dependencies from `Packages/manifest.json`.
+3. Create a scene and attach:
+   - `SharedMemoryReceiver`
+   - `StereoSphereRenderer`
+   - `HeadPoseTracker`
+   - `UdpGazeSender`
+   - `ExperimentController`
+4. Use shader `Pano2Stereo/StereoPanorama` on an inverted sphere material.
+5. Start Python server with shared memory + UDP enabled:
+   - `python src/pano2stereo.py --source Data/test1.mp4 --output-method shm --shm-name pano2stereo --gaze-udp-port 50051 --experiment-logging`
+
+## Current Baseline
+
+- Protocol smoke (G2) validated in Python repo.
+- This repo provides G3 Unity MVP scaffolding and core script skeletons.

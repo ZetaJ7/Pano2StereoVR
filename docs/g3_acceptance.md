@@ -4,6 +4,8 @@ This runbook covers the next executable step for gate `G3`:
 - mode switch verification with explicit `requested/sent/applied` signals,
 - coordinate mapping cardinal-marker validation.
 
+Unity baseline for this runbook: `2022.3.62f3` (Hub variant `2022.3.62f3c1`).
+
 ## 1) Scene wiring checklist
 
 Create scene `Assets/Scenes/VRExperiment.unity` and wire components:

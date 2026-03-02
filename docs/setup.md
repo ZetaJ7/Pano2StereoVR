@@ -2,7 +2,7 @@
 
 ## 1) Unity Environment
 
-- Unity: `2022.3 LTS`
+- Unity: `2022.3.62f3` (Hub variant `2022.3.62f3c1` is acceptable)
 - XR Plugin: OpenXR
 - Runtime: SteamVR OpenXR runtime (or your target OpenXR runtime)
 

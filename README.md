@@ -11,7 +11,7 @@ Unity OpenXR viewer for VR subjective experiments driven by the `Pano2Stereo` Py
 
 ## Recommended Unity Version
 
-- `Unity 2022.3 LTS`
+- `Unity 2022.3.62f3` (if Hub shows `2022.3.62f3c1`, use that build)
 
 ## Repository Layout
 

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Pano2StereoVR
@@ -15,6 +16,8 @@ namespace Pano2StereoVR
         public Vector3 ServerForwardUnit { get; private set; } = new Vector3(1f, 0f, 0f);
         public bool IsDebugOverrideActive { get; private set; }
         public Vector3 DebugOverrideVector { get; private set; } = new Vector3(1f, 0f, 0f);
+        public event Action<string, Vector3> DebugOverrideApplied;
+        public event Action<Vector3> DebugOverrideCleared;
 
         private void Reset()
         {
@@ -53,6 +56,11 @@ namespace Pano2StereoVR
 
         public void SetDebugOverride(Vector3 serverUnit)
         {
+            SetDebugOverride(serverUnit, "custom");
+        }
+
+        public void SetDebugOverride(Vector3 serverUnit, string presetLabel)
+        {
             if (serverUnit.sqrMagnitude < 1e-8f)
             {
                 return;
@@ -60,7 +68,10 @@ namespace Pano2StereoVR
 
             DebugOverrideVector = serverUnit.normalized;
             IsDebugOverrideActive = true;
-            Debug.Log("[HeadPoseTracker] debug override set to " + DebugOverrideVector);
+            Debug.Log(
+                "[HeadPoseTracker] debug override set (" + presetLabel + ") to " + DebugOverrideVector
+            );
+            DebugOverrideApplied?.Invoke(presetLabel, DebugOverrideVector);
         }
 
         public void ClearDebugOverride()
@@ -70,8 +81,10 @@ namespace Pano2StereoVR
                 return;
             }
 
+            Vector3 clearedVector = DebugOverrideVector;
             IsDebugOverrideActive = false;
             Debug.Log("[HeadPoseTracker] debug override cleared");
+            DebugOverrideCleared?.Invoke(clearedVector);
         }
 
         private void HandleDebugHotkeys()
@@ -83,15 +96,15 @@ namespace Pano2StereoVR
 
             if (Input.GetKeyDown(centerVectorKey))
             {
-                SetDebugOverride(new Vector3(1f, 0f, 0f));
+                SetDebugOverride(new Vector3(1f, 0f, 0f), "F1_center");
             }
             if (Input.GetKeyDown(leftVectorKey))
             {
-                SetDebugOverride(new Vector3(0f, 1f, 0f));
+                SetDebugOverride(new Vector3(0f, 1f, 0f), "F2_left");
             }
             if (Input.GetKeyDown(topVectorKey))
             {
-                SetDebugOverride(new Vector3(0f, 0f, 1f));
+                SetDebugOverride(new Vector3(0f, 0f, 1f), "F3_top");
             }
             if (Input.GetKeyDown(clearOverrideKey))
             {

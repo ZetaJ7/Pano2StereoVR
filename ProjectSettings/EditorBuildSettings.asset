@@ -4,6 +4,9 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/VRExperiment.unity
+    guid: 5b508169cebe0f541b267fe7d6f73609
   m_configObjects:
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 63a1e6b83aab24745bd862f624d6fb10, type: 2}

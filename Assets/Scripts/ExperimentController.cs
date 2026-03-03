@@ -10,11 +10,15 @@ namespace Pano2StereoVR
         [SerializeField] private SharedMemoryReceiver sharedMemoryReceiver;
         [SerializeField] private UdpGazeSender udpGazeSender;
         [SerializeField] private HeadPoseTracker headPoseTracker;
+        [SerializeField] private StereoSphereRenderer stereoSphereRenderer;
         [SerializeField] private KeyCode mode1Key = KeyCode.Alpha1;
         [SerializeField] private KeyCode mode2Key = KeyCode.Alpha2;
         [SerializeField] private KeyCode mode3Key = KeyCode.Alpha3;
         [SerializeField] private bool showOverlay = true;
+        [SerializeField] private bool showShmPreview = true;
+        [SerializeField] [Range(0.1f, 0.5f)] private float shmPreviewWidthRatio = 0.40f;
         [SerializeField] [Min(0.1f)] private float applyTimeoutSeconds = 1.0f;
+        [SerializeField] [Range(0.25f, 2.0f)] private float fpsSampleWindowSeconds = 1.0f;
         [SerializeField] private bool writeValidationLog = true;
         [SerializeField] private string validationLogFileName = "g3_mode_validation.jsonl";
 
@@ -28,6 +32,10 @@ namespace Pano2StereoVR
         private bool _hasPendingRequest;
         private bool _requestTimedOut;
         private string _validationLogPath = string.Empty;
+        private float _fpsWindowStartTime = -1f;
+        private long _fpsWindowStartAcceptedFrames;
+        private float _shmReceiveFps;
+        private float _unityFpsSmoothed;
 
         public long RequestedSwitchCount { get; private set; }
         public long AppliedSwitchCount { get; private set; }
@@ -49,6 +57,10 @@ namespace Pano2StereoVR
         private void OnEnable()
         {
             TryResolveReferences();
+            _fpsWindowStartTime = -1f;
+            _fpsWindowStartAcceptedFrames = 0;
+            _shmReceiveFps = 0f;
+            _unityFpsSmoothed = 0f;
             if (udpGazeSender != null)
             {
                 udpGazeSender.ModeMessageSent += OnModeSent;
@@ -57,6 +69,11 @@ namespace Pano2StereoVR
             {
                 sharedMemoryReceiver.ModeApplied += OnModeApplied;
                 _lastAppliedMode = sharedMemoryReceiver.CurrentMode;
+            }
+            if (headPoseTracker != null)
+            {
+                headPoseTracker.DebugOverrideApplied += OnDebugOverrideApplied;
+                headPoseTracker.DebugOverrideCleared += OnDebugOverrideCleared;
             }
             if (udpGazeSender != null)
             {
@@ -83,10 +100,16 @@ namespace Pano2StereoVR
             {
                 sharedMemoryReceiver.ModeApplied -= OnModeApplied;
             }
+            if (headPoseTracker != null)
+            {
+                headPoseTracker.DebugOverrideApplied -= OnDebugOverrideApplied;
+                headPoseTracker.DebugOverrideCleared -= OnDebugOverrideCleared;
+            }
         }
 
         private void Update()
         {
+            UpdateOverlayFps();
             if (udpGazeSender == null)
             {
                 return;
@@ -140,10 +163,10 @@ namespace Pano2StereoVR
             float appliedAge = _appliedTime < 0f ? 0f : Time.unscaledTime - _appliedTime;
 
             GUI.color = Color.black;
-            GUI.Box(new Rect(16, 16, 630, 250), GUIContent.none);
+            GUI.Box(new Rect(16, 16, 730, 360), GUIContent.none);
             GUI.color = Color.white;
 
-            GUILayout.BeginArea(new Rect(26, 24, 610, 238));
+            GUILayout.BeginArea(new Rect(26, 24, 710, 344));
             GUILayout.Label("G3 Mode Verification");
             GUILayout.Label("Requested: " + _lastRequestedMode + " (" + requestState + ")");
             GUILayout.Label("Sent: " + _lastSentMode + " | age=" + sentAge.ToString("F2") + "s");
@@ -188,6 +211,35 @@ namespace Pano2StereoVR
                 );
             }
             GUILayout.Label(
+                "Perf: unity_fps=" + _unityFpsSmoothed.ToString("F1")
+                + " shm_recv_fps=" + _shmReceiveFps.ToString("F1")
+                + " shm_seq_fps="
+                + (sharedMemoryReceiver != null ? sharedMemoryReceiver.ObservedWriterFps.ToString("F1") : "0.0")
+            );
+            if (stereoSphereRenderer != null)
+            {
+                GUILayout.Label(
+                    "Render: target=" + (stereoSphereRenderer.HasTargetRenderer ? "yes" : "no")
+                    + " enabled=" + (stereoSphereRenderer.RendererEnabled ? "yes" : "no")
+                    + " visible=" + (stereoSphereRenderer.RendererVisible ? "yes" : "no")
+                    + " tex_bound=" + (stereoSphereRenderer.HasBoundTexture ? "yes" : "no")
+                );
+                if (stereoSphereRenderer.HasBoundTexture)
+                {
+                    GUILayout.Label(
+                        "Texture: " + stereoSphereRenderer.BoundTextureWidth + "x"
+                        + stereoSphereRenderer.BoundTextureHeight
+                        + " cam_dist=" + stereoSphereRenderer.CameraDistance.ToString("F2")
+                    );
+                }
+                GUILayout.Label(
+                    "Orientation: flip_x=" + (stereoSphereRenderer.FlipX ? "on" : "off")
+                    + " flip_y=" + (stereoSphereRenderer.FlipY ? "on" : "off")
+                    + " swap_eyes=" + (stereoSphereRenderer.SwapEyes ? "on" : "off")
+                    + " (F7/F8)"
+                );
+            }
+            GUILayout.Label(
                 "Switch count: requested=" + RequestedSwitchCount
                 + " applied=" + AppliedSwitchCount + " timeout=" + TimeoutCount
             );
@@ -196,17 +248,35 @@ namespace Pano2StereoVR
                 GUILayout.Label("Log: " + _validationLogPath);
             }
             GUILayout.EndArea();
+
+            DrawShmPreview();
         }
 
         private void RequestModeSwitch(int mode)
         {
             int clampedMode = Mathf.Clamp(mode, 1, 3);
+            bool alreadyApplied = sharedMemoryReceiver != null
+                && sharedMemoryReceiver.IsOpened
+                && sharedMemoryReceiver.CurrentMode == clampedMode
+                && _lastAppliedMode == clampedMode;
+
             _lastRequestedMode = clampedMode;
             _requestTime = Time.unscaledTime;
-            _hasPendingRequest = true;
             _requestTimedOut = false;
             RequestedSwitchCount += 1;
 
+            if (alreadyApplied)
+            {
+                _hasPendingRequest = false;
+                _appliedTime = Time.unscaledTime;
+                _lastAppliedLatencyMs = 0f;
+                udpGazeSender.SetMode(clampedMode);
+                Debug.Log("[ExperimentController] requested mode already applied -> " + clampedMode);
+                WriteValidationEvent("mode_requested", clampedMode, "keyboard_already_applied");
+                return;
+            }
+
+            _hasPendingRequest = true;
             udpGazeSender.SetMode(clampedMode);
             Debug.Log("[ExperimentController] requested mode -> " + clampedMode);
             WriteValidationEvent("mode_requested", clampedMode, "keyboard");
@@ -241,6 +311,32 @@ namespace Pano2StereoVR
             }
         }
 
+        private void OnDebugOverrideApplied(string presetLabel, Vector3 u0)
+        {
+            WriteValidationEvent(
+                "u0_override_set",
+                CurrentMode,
+                "preset=" + presetLabel,
+                -1f,
+                true,
+                u0,
+                "DebugOverride"
+            );
+        }
+
+        private void OnDebugOverrideCleared(Vector3 previousU0)
+        {
+            WriteValidationEvent(
+                "u0_override_cleared",
+                CurrentMode,
+                "return_to_hmd",
+                -1f,
+                true,
+                previousU0,
+                "HMD"
+            );
+        }
+
         private void TryResolveReferences()
         {
             if (udpGazeSender == null)
@@ -255,10 +351,84 @@ namespace Pano2StereoVR
             {
                 headPoseTracker = FindObjectOfType<HeadPoseTracker>();
             }
+            if (stereoSphereRenderer == null)
+            {
+                stereoSphereRenderer = FindObjectOfType<StereoSphereRenderer>();
+            }
             if (headPoseTracker == null && udpGazeSender != null)
             {
                 headPoseTracker = udpGazeSender.PoseTracker;
             }
+        }
+
+        private void DrawShmPreview()
+        {
+            if (!showShmPreview || sharedMemoryReceiver == null || sharedMemoryReceiver.StereoTexture == null)
+            {
+                return;
+            }
+
+            Texture texture = sharedMemoryReceiver.StereoTexture;
+            float width = Mathf.Clamp(Screen.width * shmPreviewWidthRatio, 240f, Screen.width * 0.45f);
+            float aspect = texture.width / Mathf.Max(1f, texture.height);
+            float height = width / Mathf.Max(0.1f, aspect);
+            float maxHeight = Screen.height * 0.32f;
+            if (height > maxHeight)
+            {
+                height = maxHeight;
+                width = height * aspect;
+            }
+
+            float x = Screen.width - width - 20f;
+            float y = Screen.height - height - 20f;
+
+            GUI.color = Color.black;
+            GUI.Box(new Rect(x - 6f, y - 26f, width + 12f, height + 32f), GUIContent.none);
+            GUI.color = Color.white;
+            GUI.Label(new Rect(x + 4f, y - 22f, 240f, 20f), "SHM Preview");
+            GUI.DrawTextureWithTexCoords(new Rect(x, y, width, height), texture, new Rect(0f, 1f, 1f, -1f), false);
+        }
+
+        private void UpdateOverlayFps()
+        {
+            float dt = Time.unscaledDeltaTime;
+            if (dt > 0.00001f)
+            {
+                float instantUnityFps = 1f / dt;
+                if (_unityFpsSmoothed <= 0f)
+                {
+                    _unityFpsSmoothed = instantUnityFps;
+                }
+                else
+                {
+                    _unityFpsSmoothed = Mathf.Lerp(_unityFpsSmoothed, instantUnityFps, 0.1f);
+                }
+            }
+
+            if (sharedMemoryReceiver == null)
+            {
+                return;
+            }
+
+            if (_fpsWindowStartTime < 0f)
+            {
+                _fpsWindowStartTime = Time.unscaledTime;
+                _fpsWindowStartAcceptedFrames = sharedMemoryReceiver.AcceptedFrames;
+                return;
+            }
+
+            float elapsed = Time.unscaledTime - _fpsWindowStartTime;
+            if (elapsed < fpsSampleWindowSeconds)
+            {
+                return;
+            }
+
+            long acceptedNow = sharedMemoryReceiver.AcceptedFrames;
+            long acceptedDelta = acceptedNow - _fpsWindowStartAcceptedFrames;
+            _shmReceiveFps = acceptedDelta / Mathf.Max(0.001f, elapsed);
+
+            _fpsWindowStartTime = Time.unscaledTime;
+            _fpsWindowStartAcceptedFrames = acceptedNow;
         }
 
         private static string FormatVector(Vector3 value)
@@ -276,7 +446,10 @@ namespace Pano2StereoVR
             string eventType,
             int mode,
             string detail,
-            float latencyMs = -1f
+            float latencyMs = -1f,
+            bool includeU0 = false,
+            Vector3 u0 = default,
+            string u0Source = null
         )
         {
             if (!writeValidationLog || string.IsNullOrEmpty(_validationLogPath))
@@ -298,6 +471,16 @@ namespace Pano2StereoVR
                 if (latencyMs >= 0f)
                 {
                     line += ",\"latency_ms\":" + latencyMs.ToString("F3", CultureInfo.InvariantCulture);
+                }
+                if (includeU0)
+                {
+                    line += ",\"u0_x\":" + u0.x.ToString("F6", CultureInfo.InvariantCulture);
+                    line += ",\"u0_y\":" + u0.y.ToString("F6", CultureInfo.InvariantCulture);
+                    line += ",\"u0_z\":" + u0.z.ToString("F6", CultureInfo.InvariantCulture);
+                    if (!string.IsNullOrEmpty(u0Source))
+                    {
+                        line += ",\"u0_source\":\"" + u0Source + "\"";
+                    }
                 }
                 line += "}";
                 File.AppendAllText(_validationLogPath, line + Environment.NewLine);

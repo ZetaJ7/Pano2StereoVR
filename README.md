@@ -45,3 +45,4 @@ Pano2StereoVR/
 - Protocol smoke (G2) validated in Python repo.
 - This repo provides G3 Unity MVP scaffolding and core script skeletons.
 - G3 acceptance execution checklist: `docs/g3_acceptance.md`.
+- Performance backlog / TODO: `docs/TODO.md`.

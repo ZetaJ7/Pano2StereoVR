@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace Pano2StereoVR
 {
@@ -7,6 +9,8 @@ namespace Pano2StereoVR
     {
         [SerializeField] private Transform headTransform;
         [SerializeField] private bool useMainCameraWhenUnset = true;
+        [SerializeField] private bool preferXrNodePose = true;
+        [SerializeField] private bool logPoseSourceChanges = true;
         [SerializeField] private bool enableDebugOverrideHotkeys = false;
         [SerializeField] private KeyCode centerVectorKey = KeyCode.F1;
         [SerializeField] private KeyCode leftVectorKey = KeyCode.F2;
@@ -18,6 +22,10 @@ namespace Pano2StereoVR
         public Vector3 DebugOverrideVector { get; private set; } = new Vector3(1f, 0f, 0f);
         public event Action<string, Vector3> DebugOverrideApplied;
         public event Action<Vector3> DebugOverrideCleared;
+
+        private static readonly List<XRNodeState> XrNodeStates = new List<XRNodeState>(8);
+        private bool _lastUsedXrNodePose;
+        private bool _hasPoseSourceLog;
 
         private void Reset()
         {
@@ -36,22 +44,32 @@ namespace Pano2StereoVR
                 return;
             }
 
-            if (headTransform == null && useMainCameraWhenUnset && Camera.main != null)
+            Vector3 forward = Vector3.zero;
+            bool usedXrNodePose = false;
+            if (preferXrNodePose && TryGetHeadForwardFromXr(out forward))
             {
-                headTransform = Camera.main.transform;
+                usedXrNodePose = true;
             }
-            if (headTransform == null)
+            else
             {
-                return;
+                if (headTransform == null && useMainCameraWhenUnset && Camera.main != null)
+                {
+                    headTransform = Camera.main.transform;
+                }
+                if (headTransform == null)
+                {
+                    return;
+                }
+                forward = headTransform.forward;
             }
 
-            Vector3 forward = headTransform.forward;
             Vector3 mapped = new Vector3(forward.z, -forward.x, forward.y);
             if (mapped.sqrMagnitude < 1e-8f)
             {
                 return;
             }
             ServerForwardUnit = mapped.normalized;
+            LogPoseSourceIfChanged(usedXrNodePose);
         }
 
         public void SetDebugOverride(Vector3 serverUnit)
@@ -110,6 +128,56 @@ namespace Pano2StereoVR
             {
                 ClearDebugOverride();
             }
+        }
+
+        private static bool TryGetHeadForwardFromXr(out Vector3 forward)
+        {
+            forward = Vector3.zero;
+            XrNodeStates.Clear();
+            InputTracking.GetNodeStates(XrNodeStates);
+            for (int index = 0; index < XrNodeStates.Count; index++)
+            {
+                XRNodeState state = XrNodeStates[index];
+                if (state.nodeType != XRNode.CenterEye && state.nodeType != XRNode.Head)
+                {
+                    continue;
+                }
+                if (!state.tracked)
+                {
+                    continue;
+                }
+                if (!state.TryGetRotation(out Quaternion rotation))
+                {
+                    continue;
+                }
+                Vector3 candidateForward = rotation * Vector3.forward;
+                if (candidateForward.sqrMagnitude < 1e-8f)
+                {
+                    continue;
+                }
+                forward = candidateForward.normalized;
+                return true;
+            }
+            return false;
+        }
+
+        private void LogPoseSourceIfChanged(bool usedXrNodePose)
+        {
+            if (!logPoseSourceChanges)
+            {
+                return;
+            }
+            if (_hasPoseSourceLog && _lastUsedXrNodePose == usedXrNodePose)
+            {
+                return;
+            }
+
+            _lastUsedXrNodePose = usedXrNodePose;
+            _hasPoseSourceLog = true;
+            Debug.Log(
+                "[HeadPoseTracker] pose source -> "
+                + (usedXrNodePose ? "XRNode" : "CameraTransform")
+            );
         }
     }
 }

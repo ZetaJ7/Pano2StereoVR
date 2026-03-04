@@ -9,4 +9,5 @@ EditorBuildSettings:
     path: Assets/Scenes/VRExperiment.unity
     guid: 5b508169cebe0f541b267fe7d6f73609
   m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 662bc3aec49c96f4c9f4a7c55c6830fa, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 63a1e6b83aab24745bd862f624d6fb10, type: 2}

@@ -14,6 +14,15 @@ namespace Pano2StereoVR
         [SerializeField] private KeyCode mode1Key = KeyCode.Alpha1;
         [SerializeField] private KeyCode mode2Key = KeyCode.Alpha2;
         [SerializeField] private KeyCode mode3Key = KeyCode.Alpha3;
+        [SerializeField] private KeyCode ipdIncreaseKey = KeyCode.Equals;
+        [SerializeField] private KeyCode ipdIncreaseKeyAlt = KeyCode.KeypadPlus;
+        [SerializeField] private KeyCode ipdDecreaseKey = KeyCode.Minus;
+        [SerializeField] private KeyCode ipdDecreaseKeyAlt = KeyCode.KeypadMinus;
+        [SerializeField] private KeyCode ipdResetKey = KeyCode.Alpha0;
+        [SerializeField] private float ipdDefault = 0.065f;
+        [SerializeField] private float ipdStep = 0.005f;
+        [SerializeField] private float ipdMin = 0.0f;
+        [SerializeField] private float ipdMax = 0.130f;
         [SerializeField] private bool showOverlay = true;
         [SerializeField] private bool showShmPreview = true;
         [SerializeField] [Range(0.1f, 0.5f)] private float shmPreviewWidthRatio = 0.40f;
@@ -36,6 +45,8 @@ namespace Pano2StereoVR
         private long _fpsWindowStartAcceptedFrames;
         private float _shmReceiveFps;
         private float _unityFpsSmoothed;
+        private float _currentIpd;
+        private bool _pendingInitialIpdSync;
 
         public long RequestedSwitchCount { get; private set; }
         public long AppliedSwitchCount { get; private set; }
@@ -61,6 +72,8 @@ namespace Pano2StereoVR
             _fpsWindowStartAcceptedFrames = 0;
             _shmReceiveFps = 0f;
             _unityFpsSmoothed = 0f;
+            _currentIpd = Mathf.Clamp(ipdDefault, ipdMin, ipdMax);
+            _pendingInitialIpdSync = true;
             if (udpGazeSender != null)
             {
                 udpGazeSender.ModeMessageSent += OnModeSent;
@@ -115,6 +128,12 @@ namespace Pano2StereoVR
                 return;
             }
 
+            if (_pendingInitialIpdSync && udpGazeSender.IsConnected)
+            {
+                SendCurrentIpd("initial_sync");
+                _pendingInitialIpdSync = false;
+            }
+
             if (Input.GetKeyDown(mode1Key))
             {
                 RequestModeSwitch(1);
@@ -126,6 +145,19 @@ namespace Pano2StereoVR
             if (Input.GetKeyDown(mode3Key))
             {
                 RequestModeSwitch(3);
+            }
+
+            if (Input.GetKeyDown(ipdIncreaseKey) || Input.GetKeyDown(ipdIncreaseKeyAlt))
+            {
+                AdjustIpd(ipdStep);
+            }
+            if (Input.GetKeyDown(ipdDecreaseKey) || Input.GetKeyDown(ipdDecreaseKeyAlt))
+            {
+                AdjustIpd(-ipdStep);
+            }
+            if (Input.GetKeyDown(ipdResetKey))
+            {
+                ResetIpdToDefault();
             }
 
             if (_hasPendingRequest && !_requestTimedOut)
@@ -196,6 +228,7 @@ namespace Pano2StereoVR
                 GUILayout.Label(
                     "UDP: connected=" + (udpGazeSender.IsConnected ? "yes" : "no")
                     + " mode_packets=" + udpGazeSender.ModePacketsSent
+                    + " ipd_packets=" + udpGazeSender.IpdPacketsSent
                     + " gaze_packets=" + udpGazeSender.GazePacketsSent
                     + " combined_packets=" + udpGazeSender.CombinedPacketsSent
                     + " send_errors=" + udpGazeSender.PacketSendErrors
@@ -239,6 +272,16 @@ namespace Pano2StereoVR
                     + " (F7/F8)"
                 );
             }
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(
+                "IPD: " + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture)
+                + "mm (+/- adjust, 0 reset)"
+            );
+            if (GUILayout.Button("Reset IPD", GUILayout.Width(90f)))
+            {
+                ResetIpdToDefault();
+            }
+            GUILayout.EndHorizontal();
             GUILayout.Label(
                 "Switch count: requested=" + RequestedSwitchCount
                 + " applied=" + AppliedSwitchCount + " timeout=" + TimeoutCount
@@ -250,6 +293,36 @@ namespace Pano2StereoVR
             GUILayout.EndArea();
 
             DrawShmPreview();
+        }
+
+        private void AdjustIpd(float delta)
+        {
+            float newIpd = Mathf.Clamp(_currentIpd + delta, ipdMin, ipdMax);
+            if (Mathf.Approximately(newIpd, _currentIpd))
+            {
+                return;
+            }
+            _currentIpd = newIpd;
+            SendCurrentIpd("adjust");
+            Debug.Log(
+                "[ExperimentController] IPD adjusted to "
+                + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture) + "mm"
+            );
+        }
+
+        private void ResetIpdToDefault()
+        {
+            float defaultIpd = Mathf.Clamp(ipdDefault, ipdMin, ipdMax);
+            if (Mathf.Approximately(defaultIpd, _currentIpd))
+            {
+                return;
+            }
+            _currentIpd = defaultIpd;
+            SendCurrentIpd("reset");
+            Debug.Log(
+                "[ExperimentController] IPD reset to default: "
+                + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture) + "mm"
+            );
         }
 
         private void RequestModeSwitch(int mode)
@@ -271,6 +344,7 @@ namespace Pano2StereoVR
                 _appliedTime = Time.unscaledTime;
                 _lastAppliedLatencyMs = 0f;
                 udpGazeSender.SetMode(clampedMode);
+                SendCurrentIpd("mode_switch");
                 Debug.Log("[ExperimentController] requested mode already applied -> " + clampedMode);
                 WriteValidationEvent("mode_requested", clampedMode, "keyboard_already_applied");
                 return;
@@ -278,8 +352,29 @@ namespace Pano2StereoVR
 
             _hasPendingRequest = true;
             udpGazeSender.SetMode(clampedMode);
+            SendCurrentIpd("mode_switch");
             Debug.Log("[ExperimentController] requested mode -> " + clampedMode);
             WriteValidationEvent("mode_requested", clampedMode, "keyboard");
+        }
+
+        private void SendCurrentIpd(string reason)
+        {
+            if (udpGazeSender == null)
+            {
+                return;
+            }
+
+            udpGazeSender.SendIpd(_currentIpd);
+            WriteValidationEvent(
+                "ipd_sent",
+                CurrentMode,
+                "reason=" + reason + ",ipd_mm="
+                + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture)
+            );
+            Debug.Log(
+                "[ExperimentController] IPD sent (" + reason + "): "
+                + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture) + "mm"
+            );
         }
 
         private void OnModeSent(int mode, float sentTime)

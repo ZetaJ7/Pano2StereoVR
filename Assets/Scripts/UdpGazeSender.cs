@@ -13,7 +13,9 @@ namespace Pano2StereoVR
         [SerializeField] private int port = 50051;
         [SerializeField] [Range(1, 120)] private int sendRateHz = 60;
         [SerializeField] private bool includeModeInGazePacket = false;
+        [SerializeField] private bool includeIpdInGazePacket = true;
         [SerializeField] [Range(1, 3)] private int initialMode = 3;
+        [SerializeField] [Range(0f, 0.13f)] private float initialIpdMeters = 0.065f;
 
         private UdpClient _udpClient;
         private float _nextSendTime;
@@ -22,17 +24,20 @@ namespace Pano2StereoVR
 
         public HeadPoseTracker PoseTracker => poseTracker;
         public int CurrentMode { get; private set; }
+        public float CurrentIpd { get; private set; }
         public int LastSentMode { get; private set; } = -1;
         public float LastModeSentTime { get; private set; } = -1f;
         public long GazePacketsSent { get; private set; }
         public long CombinedPacketsSent { get; private set; }
         public long ModePacketsSent { get; private set; }
+        public long IpdPacketsSent { get; private set; }
         public long PacketSendErrors { get; private set; }
         public bool IsConnected => _udpClient != null;
 
         private void Awake()
         {
             CurrentMode = initialMode;
+            CurrentIpd = Mathf.Clamp(initialIpdMeters, 0f, 0.13f);
         }
 
         private void OnEnable()
@@ -82,6 +87,16 @@ namespace Pano2StereoVR
             SendModeOnly(clamped);
         }
 
+        public void SendIpd(float ipd)
+        {
+            CurrentIpd = Mathf.Clamp(ipd, 0f, 0.13f);
+            string payload = "{\"ipd\":" + FormatFloat(CurrentIpd) + "}";
+            if (SendPayload(payload))
+            {
+                IpdPacketsSent += 1;
+            }
+        }
+
         private void TryConnect()
         {
             try
@@ -98,13 +113,17 @@ namespace Pano2StereoVR
 
         private void SendGazeOnly(Vector3 u0)
         {
-            string payload = string.Format(
-                CultureInfo.InvariantCulture,
-                "{{\"u0\":[{0:F6},{1:F6},{2:F6}]}}",
-                u0.x,
-                u0.y,
-                u0.z
-            );
+            string payload;
+            if (includeIpdInGazePacket)
+            {
+                payload = "{\"u0\":[" + FormatFloat(u0.x) + "," + FormatFloat(u0.y) + ","
+                    + FormatFloat(u0.z) + "],\"ipd\":" + FormatFloat(CurrentIpd) + "}";
+            }
+            else
+            {
+                payload = "{\"u0\":[" + FormatFloat(u0.x) + "," + FormatFloat(u0.y) + ","
+                    + FormatFloat(u0.z) + "]}";
+            }
             if (SendPayload(payload))
             {
                 GazePacketsSent += 1;
@@ -125,14 +144,20 @@ namespace Pano2StereoVR
 
         private void SendGazeAndMode(Vector3 u0, int mode)
         {
-            string payload = string.Format(
-                CultureInfo.InvariantCulture,
-                "{{\"u0\":[{0:F6},{1:F6},{2:F6}],\"mode\":{3}}}",
-                u0.x,
-                u0.y,
-                u0.z,
-                mode
-            );
+            string payload;
+            if (includeIpdInGazePacket)
+            {
+                payload = "{\"u0\":[" + FormatFloat(u0.x) + "," + FormatFloat(u0.y) + ","
+                    + FormatFloat(u0.z) + "],\"mode\":"
+                    + mode.ToString(CultureInfo.InvariantCulture)
+                    + ",\"ipd\":" + FormatFloat(CurrentIpd) + "}";
+            }
+            else
+            {
+                payload = "{\"u0\":[" + FormatFloat(u0.x) + "," + FormatFloat(u0.y) + ","
+                    + FormatFloat(u0.z) + "],\"mode\":"
+                    + mode.ToString(CultureInfo.InvariantCulture) + "}";
+            }
             if (SendPayload(payload))
             {
                 CombinedPacketsSent += 1;
@@ -158,6 +183,11 @@ namespace Pano2StereoVR
                 Debug.LogWarning("[UdpGazeSender] send failed: " + ex.Message);
                 return false;
             }
+        }
+
+        private static string FormatFloat(float value)
+        {
+            return value.ToString("F6", CultureInfo.InvariantCulture);
         }
     }
 }

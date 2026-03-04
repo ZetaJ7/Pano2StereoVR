@@ -327,7 +327,9 @@ MonoBehaviour:
   port: 50051
   sendRateHz: 60
   includeModeInGazePacket: 0
+  includeIpdInGazePacket: 1
   initialMode: 3
+  initialIpdMeters: 0.065
 --- !u!4 &303507125
 Transform:
   m_ObjectHideFlags: 0

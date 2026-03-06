@@ -17,6 +17,7 @@ namespace Pano2StereoVR
         [SerializeField] private KeyCode mode2Key = KeyCode.Alpha2;
         [SerializeField] private KeyCode mode3Key = KeyCode.Alpha3;
         [SerializeField] private KeyCode mode4Key = KeyCode.Alpha4;
+        [SerializeField] private KeyCode quitKey = KeyCode.Escape;
         [SerializeField] private KeyCode ipdIncreaseKey = KeyCode.Equals;
         [SerializeField] private KeyCode ipdIncreaseKeyAlt = KeyCode.KeypadPlus;
         [SerializeField] private KeyCode ipdDecreaseKey = KeyCode.Minus;
@@ -148,6 +149,12 @@ namespace Pano2StereoVR
 
         private void Update()
         {
+            if (Input.GetKeyDown(quitKey))
+            {
+                RequestQuit();
+                return;
+            }
+
             UpdateOverlayFps();
 
             if (Input.GetKeyDown(mode1Key))
@@ -214,6 +221,17 @@ namespace Pano2StereoVR
                     );
                 }
             }
+        }
+
+        private void RequestQuit()
+        {
+            Debug.Log("[ExperimentController] quit requested via ESC");
+            WriteValidationEvent("quit_requested", CurrentMode, "keyboard_escape");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private void OnGUI()

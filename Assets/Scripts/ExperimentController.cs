@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
@@ -11,9 +11,12 @@ namespace Pano2StereoVR
         [SerializeField] private UdpGazeSender udpGazeSender;
         [SerializeField] private HeadPoseTracker headPoseTracker;
         [SerializeField] private StereoSphereRenderer stereoSphereRenderer;
+        [SerializeField] private RtspBaselineReceiver rtspBaselineReceiver;
+        [SerializeField] private BaselinePanoramaRenderer baselinePanoramaRenderer;
         [SerializeField] private KeyCode mode1Key = KeyCode.Alpha1;
         [SerializeField] private KeyCode mode2Key = KeyCode.Alpha2;
         [SerializeField] private KeyCode mode3Key = KeyCode.Alpha3;
+        [SerializeField] private KeyCode mode4Key = KeyCode.Alpha4;
         [SerializeField] private KeyCode ipdIncreaseKey = KeyCode.Equals;
         [SerializeField] private KeyCode ipdIncreaseKeyAlt = KeyCode.KeypadPlus;
         [SerializeField] private KeyCode ipdDecreaseKey = KeyCode.Minus;
@@ -30,6 +33,7 @@ namespace Pano2StereoVR
         [SerializeField] [Range(0.25f, 2.0f)] private float fpsSampleWindowSeconds = 1.0f;
         [SerializeField] private bool writeValidationLog = true;
         [SerializeField] private string validationLogFileName = "g3_mode_validation.jsonl";
+        [SerializeField] private bool startInMode4 = false;
 
         private int _lastRequestedMode = 3;
         private int _lastSentMode = -1;
@@ -47,6 +51,11 @@ namespace Pano2StereoVR
         private float _unityFpsSmoothed;
         private float _currentIpd;
         private bool _pendingInitialIpdSync;
+        private bool _isMode4Active;
+
+        private const int ModeMin = 1;
+        private const int ModeMax = 4;
+        private const int Mode4Baseline = 4;
 
         public long RequestedSwitchCount { get; private set; }
         public long AppliedSwitchCount { get; private set; }
@@ -57,6 +66,10 @@ namespace Pano2StereoVR
         {
             get
             {
+                if (_isMode4Active)
+                {
+                    return Mode4Baseline;
+                }
                 if (sharedMemoryReceiver != null)
                 {
                     return sharedMemoryReceiver.CurrentMode;
@@ -74,6 +87,7 @@ namespace Pano2StereoVR
             _unityFpsSmoothed = 0f;
             _currentIpd = Mathf.Clamp(ipdDefault, ipdMin, ipdMax);
             _pendingInitialIpdSync = true;
+            _isMode4Active = false;
             if (udpGazeSender != null)
             {
                 udpGazeSender.ModeMessageSent += OnModeSent;
@@ -92,9 +106,21 @@ namespace Pano2StereoVR
             {
                 _lastRequestedMode = udpGazeSender.CurrentMode;
             }
+
             if (writeValidationLog)
             {
                 _validationLogPath = Path.Combine(Application.persistentDataPath, validationLogFileName);
+            }
+
+            SetMode4Active(startInMode4, "startup", true);
+            if (_isMode4Active)
+            {
+                _lastRequestedMode = Mode4Baseline;
+                _lastAppliedMode = Mode4Baseline;
+                _appliedTime = Time.unscaledTime;
+            }
+            if (writeValidationLog)
+            {
                 WriteValidationEvent("session_start", CurrentMode, "controller enabled");
             }
         }
@@ -123,16 +149,6 @@ namespace Pano2StereoVR
         private void Update()
         {
             UpdateOverlayFps();
-            if (udpGazeSender == null)
-            {
-                return;
-            }
-
-            if (_pendingInitialIpdSync && udpGazeSender.IsConnected)
-            {
-                SendCurrentIpd("initial_sync");
-                _pendingInitialIpdSync = false;
-            }
 
             if (Input.GetKeyDown(mode1Key))
             {
@@ -145,6 +161,26 @@ namespace Pano2StereoVR
             if (Input.GetKeyDown(mode3Key))
             {
                 RequestModeSwitch(3);
+            }
+            if (Input.GetKeyDown(mode4Key))
+            {
+                RequestModeSwitch(Mode4Baseline);
+            }
+
+            if (_isMode4Active)
+            {
+                return;
+            }
+
+            if (udpGazeSender == null)
+            {
+                return;
+            }
+
+            if (_pendingInitialIpdSync && udpGazeSender.IsConnected)
+            {
+                SendCurrentIpd("initial_sync");
+                _pendingInitialIpdSync = false;
             }
 
             if (Input.GetKeyDown(ipdIncreaseKey) || Input.GetKeyDown(ipdIncreaseKeyAlt))
@@ -190,109 +226,284 @@ namespace Pano2StereoVR
             string requestState = _hasPendingRequest
                 ? (_requestTimedOut ? "Timeout" : "Pending")
                 : "Applied";
-            float requestAge = _requestTime < 0f ? 0f : Time.unscaledTime - _requestTime;
-            float sentAge = _sentTime < 0f ? 0f : Time.unscaledTime - _sentTime;
-            float appliedAge = _appliedTime < 0f ? 0f : Time.unscaledTime - _appliedTime;
+            GUIStyle compactLabelStyle = new GUIStyle(GUI.skin.label)
+            {
+                margin = new RectOffset(0, 0, 0, 1),
+                padding = new RectOffset(0, 0, 0, 0)
+            };
+            GUIStyle titleStyle = new GUIStyle(compactLabelStyle)
+            {
+                fontStyle = FontStyle.Bold,
+                margin = new RectOffset(0, 0, 0, 2)
+            };
+            GUIStyle modeTitleStyle = new GUIStyle(titleStyle);
+            modeTitleStyle.normal.textColor = new Color(0.45f, 1.0f, 0.45f);
+            GUIStyle wrapLabelStyle = new GUIStyle(compactLabelStyle)
+            {
+                wordWrap = true
+            };
+            GUIStyle compactButtonStyle = new GUIStyle(GUI.skin.button)
+            {
+                margin = new RectOffset(0, 0, 0, 0),
+                padding = new RectOffset(6, 6, 1, 1)
+            };
+
+            bool hasRtspError = _isMode4Active
+                && rtspBaselineReceiver != null
+                && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError);
+            float boxHeight = CalculateCompactOverlayHeight();
+            float columnGap = 6f;
+            float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 228f : 208f;
+            float column2Width = _isMode4Active ? 220f : 212f;
+            float column3Width = hasRtspError ? 380f : 300f;
+            float desiredInnerWidth = column1Width + column2Width + column3Width + columnGap * 2f;
+            float maxInnerWidth = Screen.width - 48f;
+            float widthScale = desiredInnerWidth > maxInnerWidth ? maxInnerWidth / desiredInnerWidth : 1f;
+            column1Width *= widthScale;
+            column2Width *= widthScale;
+            column3Width *= widthScale;
+            float innerWidth = desiredInnerWidth * widthScale;
+            float boxWidth = innerWidth + 16f;
+            int displayedMode = ResolveDisplayedMode();
+            string displayedModeLabel = GetModeOverlayLabel(displayedMode);
+
+
 
             GUI.color = Color.black;
-            GUI.Box(new Rect(16, 16, 730, 360), GUIContent.none);
+            GUI.Box(new Rect(16f, 16f, boxWidth, boxHeight), GUIContent.none);
             GUI.color = Color.white;
 
-            GUILayout.BeginArea(new Rect(26, 24, 710, 344));
-            GUILayout.Label("G3 Mode Verification");
-            GUILayout.Label("Requested: " + _lastRequestedMode + " (" + requestState + ")");
-            GUILayout.Label("Sent: " + _lastSentMode + " | age=" + sentAge.ToString("F2") + "s");
+            GUILayout.BeginArea(new Rect(24f, 22f, innerWidth, boxHeight - 10f));
+            GUILayout.BeginHorizontal();
+
+            GUILayout.BeginVertical(GUILayout.Width(column1Width));
+            GUILayout.Label(displayedModeLabel, modeTitleStyle);
             GUILayout.Label(
-                "Applied: " + _lastAppliedMode + " | age=" + appliedAge.ToString("F2")
-                + "s | receiver=" + CurrentMode
+                "Switch: req/sent/app "
+                + _lastRequestedMode + "/" + _lastSentMode + "/" + _lastAppliedMode
+                + " (" + requestState + ")",
+                compactLabelStyle
             );
-            GUILayout.Label("Request age: " + requestAge.ToString("F2") + "s");
             if (_lastAppliedLatencyMs >= 0f)
             {
-                GUILayout.Label("Last apply latency: " + _lastAppliedLatencyMs.ToString("F1") + " ms");
-            }
-            if (headPoseTracker != null)
-            {
-                GUILayout.Label(
-                    "u0: " + FormatVector(headPoseTracker.ServerForwardUnit)
-                    + " | source="
-                    + (headPoseTracker.IsDebugOverrideActive ? "DebugOverride" : "HMD")
-                );
-                if (headPoseTracker.IsDebugOverrideActive)
-                {
-                    GUILayout.Label("Debug override vector: " + FormatVector(headPoseTracker.DebugOverrideVector));
-                }
-            }
-            if (udpGazeSender != null)
-            {
-                GUILayout.Label(
-                    "UDP: connected=" + (udpGazeSender.IsConnected ? "yes" : "no")
-                    + " mode_packets=" + udpGazeSender.ModePacketsSent
-                    + " ipd_packets=" + udpGazeSender.IpdPacketsSent
-                    + " gaze_packets=" + udpGazeSender.GazePacketsSent
-                    + " combined_packets=" + udpGazeSender.CombinedPacketsSent
-                    + " send_errors=" + udpGazeSender.PacketSendErrors
-                );
-            }
-            if (sharedMemoryReceiver != null)
-            {
-                GUILayout.Label(
-                    "SHM: accepted=" + sharedMemoryReceiver.AcceptedFrames
-                    + " mode_changes=" + sharedMemoryReceiver.ModeChangesApplied
-                    + " writer_busy=" + sharedMemoryReceiver.WriterBusySkips
-                    + " torn_reject=" + sharedMemoryReceiver.TornRejected
-                );
-            }
-            GUILayout.Label(
-                "Perf: unity_fps=" + _unityFpsSmoothed.ToString("F1")
-                + " shm_recv_fps=" + _shmReceiveFps.ToString("F1")
-                + " shm_seq_fps="
-                + (sharedMemoryReceiver != null ? sharedMemoryReceiver.ObservedWriterFps.ToString("F1") : "0.0")
-            );
-            if (stereoSphereRenderer != null)
-            {
-                GUILayout.Label(
-                    "Render: target=" + (stereoSphereRenderer.HasTargetRenderer ? "yes" : "no")
-                    + " enabled=" + (stereoSphereRenderer.RendererEnabled ? "yes" : "no")
-                    + " visible=" + (stereoSphereRenderer.RendererVisible ? "yes" : "no")
-                    + " tex_bound=" + (stereoSphereRenderer.HasBoundTexture ? "yes" : "no")
-                );
-                if (stereoSphereRenderer.HasBoundTexture)
-                {
-                    GUILayout.Label(
-                        "Texture: " + stereoSphereRenderer.BoundTextureWidth + "x"
-                        + stereoSphereRenderer.BoundTextureHeight
-                        + " cam_dist=" + stereoSphereRenderer.CameraDistance.ToString("F2")
-                    );
-                }
-                GUILayout.Label(
-                    "Orientation: flip_x=" + (stereoSphereRenderer.FlipX ? "on" : "off")
-                    + " flip_y=" + (stereoSphereRenderer.FlipY ? "on" : "off")
-                    + " swap_eyes=" + (stereoSphereRenderer.SwapEyes ? "on" : "off")
-                    + " (F7/F8)"
-                );
+                GUILayout.Label("Latency: " + _lastAppliedLatencyMs.ToString("F1") + " ms", compactLabelStyle);
             }
             GUILayout.BeginHorizontal();
             GUILayout.Label(
-                "IPD: " + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture)
-                + "mm (+/- adjust, 0 reset)"
+                "IPD: " + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture) + "mm",
+                compactLabelStyle,
+                GUILayout.ExpandWidth(false)
             );
-            if (GUILayout.Button("Reset IPD", GUILayout.Width(90f)))
+            GUILayout.Space(4f);
+            if (GUILayout.Button(
+                    "Reset IPD",
+                    compactButtonStyle,
+                    GUILayout.Width(88f),
+                    GUILayout.Height(20f),
+                    GUILayout.ExpandWidth(false)))
             {
                 ResetIpdToDefault();
             }
             GUILayout.EndHorizontal();
-            GUILayout.Label(
-                "Switch count: requested=" + RequestedSwitchCount
-                + " applied=" + AppliedSwitchCount + " timeout=" + TimeoutCount
-            );
-            if (!string.IsNullOrEmpty(_validationLogPath))
+            if (headPoseTracker != null && headPoseTracker.IsDebugOverrideActive)
             {
-                GUILayout.Label("Log: " + _validationLogPath);
+                GUILayout.Label("View: DebugOverride", compactLabelStyle);
+                GUILayout.Label(
+                    "Debug u0: " + FormatVector(headPoseTracker.DebugOverrideVector),
+                    wrapLabelStyle
+                );
             }
+            GUILayout.EndVertical();
+
+            GUILayout.Space(columnGap);
+
+            GUILayout.BeginVertical(GUILayout.Width(column2Width));
+            GUILayout.Label("Performance", titleStyle);
+            if (_isMode4Active)
+            {
+                GUILayout.Label(
+                    "Unity/Decode: " + _unityFpsSmoothed.ToString("F1")
+                    + " / "
+                    + (rtspBaselineReceiver != null ? rtspBaselineReceiver.DecodedFps.ToString("F1") : "0.0")
+                    + " fps",
+                    compactLabelStyle
+                );
+            }
+            else
+            {
+                GUILayout.Label(
+                    "Unity/SHM: " + _unityFpsSmoothed.ToString("F1")
+                    + " / " + _shmReceiveFps.ToString("F1") + " fps",
+                    compactLabelStyle
+                );
+                GUILayout.Label(
+                    "Writer FPS: "
+                    + (sharedMemoryReceiver != null ? sharedMemoryReceiver.ObservedWriterFps.ToString("F1") : "0.0"),
+                    compactLabelStyle
+                );
+            }
+
+            if (_isMode4Active && baselinePanoramaRenderer != null && baselinePanoramaRenderer.HasBoundTexture)
+            {
+                GUILayout.Label(
+                    "Texture: " + baselinePanoramaRenderer.BoundTextureWidth + "x"
+                    + baselinePanoramaRenderer.BoundTextureHeight,
+                    compactLabelStyle
+                );
+            }
+            else if (!_isMode4Active && stereoSphereRenderer != null && stereoSphereRenderer.HasBoundTexture)
+            {
+                GUILayout.Label(
+                    "Texture: " + stereoSphereRenderer.BoundTextureWidth + "x"
+                    + stereoSphereRenderer.BoundTextureHeight,
+                    compactLabelStyle
+                );
+            }
+            else
+            {
+                GUILayout.Label("Texture: unbound", compactLabelStyle);
+            }
+
+            if (_isMode4Active)
+            {
+                GUILayout.Label(
+                    "Frames: decoded="
+                    + (rtspBaselineReceiver != null ? rtspBaselineReceiver.DecodedFrames.ToString(CultureInfo.InvariantCulture) : "0")
+                    + " dropped="
+                    + (rtspBaselineReceiver != null ? rtspBaselineReceiver.DroppedFrames.ToString(CultureInfo.InvariantCulture) : "0"),
+                    compactLabelStyle
+                );
+            }
+            else if (sharedMemoryReceiver != null)
+            {
+                GUILayout.Label(
+                    "Frames: accepted=" + sharedMemoryReceiver.AcceptedFrames
+                    + " mode_changes=" + sharedMemoryReceiver.ModeChangesApplied,
+                    compactLabelStyle
+                );
+            }
+            GUILayout.EndVertical();
+
+            GUILayout.Space(columnGap);
+
+            GUILayout.BeginVertical(GUILayout.Width(column3Width));
+            GUILayout.Label("Receiver", titleStyle);
+            if (_isMode4Active)
+            {
+                if (rtspBaselineReceiver != null)
+                {
+                    GUILayout.Label(
+                        "RTSP: running=" + FormatYesNo(rtspBaselineReceiver.IsRunning)
+                        + " connected=" + FormatYesNo(rtspBaselineReceiver.IsConnected)
+                        + " restarts=" + rtspBaselineReceiver.RestartCount,
+                        compactLabelStyle
+                    );
+                }
+                if (baselinePanoramaRenderer != null)
+                {
+                    GUILayout.Label(
+                        "Render: visible=" + FormatYesNo(baselinePanoramaRenderer.RendererVisible)
+                        + " tex=" + FormatYesNo(baselinePanoramaRenderer.HasBoundTexture),
+                        compactLabelStyle
+                    );
+                }
+                if (rtspBaselineReceiver != null && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError))
+                {
+                    GUILayout.Label("Error: " + rtspBaselineReceiver.LastError, wrapLabelStyle);
+                }
+            }
+            else
+            {
+                if (sharedMemoryReceiver != null)
+                {
+                    GUILayout.Label(
+                        "SHM: busy=" + sharedMemoryReceiver.WriterBusySkips
+                        + " torn=" + sharedMemoryReceiver.TornRejected,
+                        compactLabelStyle
+                    );
+                }
+                if (stereoSphereRenderer != null)
+                {
+                    GUILayout.Label(
+                        "Render: visible=" + FormatYesNo(stereoSphereRenderer.RendererVisible)
+                        + " tex=" + FormatYesNo(stereoSphereRenderer.HasBoundTexture),
+                        compactLabelStyle
+                    );
+                }
+            }
+            GUILayout.EndVertical();
+
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
 
             DrawShmPreview();
+        }
+
+        private int ResolveDisplayedMode()
+        {
+            if (_isMode4Active)
+            {
+                return Mode4Baseline;
+            }
+
+            if (_hasPendingRequest && _lastRequestedMode >= ModeMin && _lastRequestedMode < Mode4Baseline)
+            {
+                return _lastRequestedMode;
+            }
+
+            if (_lastAppliedMode >= ModeMin && _lastAppliedMode < Mode4Baseline)
+            {
+                return _lastAppliedMode;
+            }
+
+            return Mathf.Clamp(CurrentMode, ModeMin, Mode4Baseline - 1);
+        }
+
+        private static string GetModeOverlayLabel(int mode)
+        {
+            switch (mode)
+            {
+                case 1:
+                    return "MONO";
+                case 2:
+                    return "Stereo";
+                case 3:
+                    return "Stereo+HMD";
+                case 4:
+                    return "Baseline";
+                default:
+                    return "Unknown";
+            }
+        }
+
+        private float CalculateCompactOverlayHeight()
+        {
+            int column1Lines = 3;
+            if (_lastAppliedLatencyMs >= 0f)
+            {
+                column1Lines += 1;
+            }
+            if (headPoseTracker != null && headPoseTracker.IsDebugOverrideActive)
+            {
+                column1Lines += 2;
+            }
+
+            int column2Lines = _isMode4Active ? 4 : 5;
+            int column3Lines = 3;
+            if (_isMode4Active && rtspBaselineReceiver != null && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError))
+            {
+                column3Lines += 2;
+            }
+
+            int maxLines = Mathf.Max(column1Lines, Mathf.Max(column2Lines, column3Lines));
+            float lineHeight = 16f;
+            float chromeHeight = 20f;
+            return Mathf.Min(chromeHeight + maxLines * lineHeight, Screen.height * 0.30f);
+        }
+
+        private static string FormatYesNo(bool value)
+        {
+            return value ? "yes" : "no";
         }
 
         private void AdjustIpd(float delta)
@@ -327,8 +538,27 @@ namespace Pano2StereoVR
 
         private void RequestModeSwitch(int mode)
         {
-            int clampedMode = Mathf.Clamp(mode, 1, 3);
+            int clampedMode = Mathf.Clamp(mode, ModeMin, ModeMax);
+            if (clampedMode == Mode4Baseline)
+            {
+                RequestMode4Baseline();
+                return;
+            }
+
+            if (udpGazeSender == null)
+            {
+                Debug.LogWarning("[ExperimentController] cannot switch mode without UDP sender.");
+                WriteValidationEvent("mode_request_failed", clampedMode, "udp_missing");
+                return;
+            }
+
+            if (_isMode4Active)
+            {
+                SetMode4Active(false, "switch_to_mode_" + clampedMode.ToString(CultureInfo.InvariantCulture));
+            }
+
             bool alreadyApplied = sharedMemoryReceiver != null
+                && sharedMemoryReceiver.enabled
                 && sharedMemoryReceiver.IsOpened
                 && sharedMemoryReceiver.CurrentMode == clampedMode
                 && _lastAppliedMode == clampedMode;
@@ -357,9 +587,40 @@ namespace Pano2StereoVR
             WriteValidationEvent("mode_requested", clampedMode, "keyboard");
         }
 
+        private void RequestMode4Baseline()
+        {
+            _lastRequestedMode = Mode4Baseline;
+            _requestTime = Time.unscaledTime;
+            _requestTimedOut = false;
+            RequestedSwitchCount += 1;
+
+            if (_isMode4Active)
+            {
+                _hasPendingRequest = false;
+                _appliedTime = Time.unscaledTime;
+                _lastAppliedLatencyMs = 0f;
+                WriteValidationEvent("mode_requested", Mode4Baseline, "keyboard_already_applied");
+                return;
+            }
+
+            WriteValidationEvent("mode_requested", Mode4Baseline, "keyboard");
+            SetMode4Active(true, "keyboard");
+            if (!_isMode4Active)
+            {
+                return;
+            }
+            _hasPendingRequest = false;
+            _appliedTime = Time.unscaledTime;
+            _lastAppliedLatencyMs = 0f;
+            _lastAppliedMode = Mode4Baseline;
+            AppliedSwitchCount += 1;
+            WriteValidationEvent("mode_applied", Mode4Baseline, "local_baseline", 0f);
+            Debug.Log("[ExperimentController] mode applied -> 4 (local baseline)");
+        }
+
         private void SendCurrentIpd(string reason)
         {
-            if (udpGazeSender == null)
+            if (_isMode4Active || udpGazeSender == null)
             {
                 return;
             }
@@ -375,6 +636,65 @@ namespace Pano2StereoVR
                 "[ExperimentController] IPD sent (" + reason + "): "
                 + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture) + "mm"
             );
+        }
+
+        private void SetMode4Active(bool active, string reason, bool force = false)
+        {
+            if (!force && _isMode4Active == active)
+            {
+                return;
+            }
+
+            if (active)
+            {
+                TryResolveReferences();
+                EnsureMode4Components();
+            }
+
+            if (active && (rtspBaselineReceiver == null || baselinePanoramaRenderer == null))
+            {
+                Debug.LogWarning("[ExperimentController] cannot enable mode 4 without RTSP receiver and mono renderer.");
+                WriteValidationEvent("mode_request_failed", Mode4Baseline, "mode4_components_missing");
+                return;
+            }
+
+            _isMode4Active = active;
+
+            if (sharedMemoryReceiver != null)
+            {
+                sharedMemoryReceiver.enabled = !active;
+            }
+            if (stereoSphereRenderer != null)
+            {
+                stereoSphereRenderer.enabled = !active;
+            }
+            if (udpGazeSender != null)
+            {
+                udpGazeSender.enabled = !active;
+            }
+            if (rtspBaselineReceiver != null)
+            {
+                rtspBaselineReceiver.enabled = active;
+            }
+            if (baselinePanoramaRenderer != null)
+            {
+                baselinePanoramaRenderer.enabled = active;
+            }
+
+            if (active)
+            {
+                _hasPendingRequest = false;
+                _requestTimedOut = false;
+                _lastSentMode = -1;
+                _shmReceiveFps = 0f;
+            }
+            else
+            {
+                _pendingInitialIpdSync = true;
+                _fpsWindowStartTime = -1f;
+            }
+
+            WriteValidationEvent(active ? "mode4_enabled" : "mode4_disabled", Mode4Baseline, reason);
         }
 
         private void OnModeSent(int mode, float sentTime)
@@ -450,15 +770,73 @@ namespace Pano2StereoVR
             {
                 stereoSphereRenderer = FindObjectOfType<StereoSphereRenderer>();
             }
+            if (rtspBaselineReceiver == null)
+            {
+                rtspBaselineReceiver = FindObjectOfType<RtspBaselineReceiver>();
+            }
+            if (baselinePanoramaRenderer == null)
+            {
+                baselinePanoramaRenderer = FindObjectOfType<BaselinePanoramaRenderer>();
+            }
             if (headPoseTracker == null && udpGazeSender != null)
             {
                 headPoseTracker = udpGazeSender.PoseTracker;
             }
         }
 
+        private void EnsureMode4Components()
+        {
+            if (rtspBaselineReceiver != null && baselinePanoramaRenderer != null)
+            {
+                return;
+            }
+
+            GameObject hostObject = null;
+            if (stereoSphereRenderer != null)
+            {
+                hostObject = stereoSphereRenderer.gameObject;
+            }
+            else if (baselinePanoramaRenderer != null)
+            {
+                hostObject = baselinePanoramaRenderer.gameObject;
+            }
+            else if (rtspBaselineReceiver != null)
+            {
+                hostObject = rtspBaselineReceiver.gameObject;
+            }
+
+            if (hostObject == null)
+            {
+                return;
+            }
+
+            if (rtspBaselineReceiver == null)
+            {
+                rtspBaselineReceiver = hostObject.GetComponent<RtspBaselineReceiver>();
+                if (rtspBaselineReceiver == null)
+                {
+                    rtspBaselineReceiver = hostObject.AddComponent<RtspBaselineReceiver>();
+                    rtspBaselineReceiver.enabled = false;
+                    rtspBaselineReceiver.StopReceiver();
+                    Debug.Log("[ExperimentController] auto-created RtspBaselineReceiver on " + hostObject.name);
+                }
+            }
+
+            if (baselinePanoramaRenderer == null)
+            {
+                baselinePanoramaRenderer = hostObject.GetComponent<BaselinePanoramaRenderer>();
+                if (baselinePanoramaRenderer == null)
+                {
+                    baselinePanoramaRenderer = hostObject.AddComponent<BaselinePanoramaRenderer>();
+                    baselinePanoramaRenderer.enabled = false;
+                    Debug.Log("[ExperimentController] auto-created BaselinePanoramaRenderer on " + hostObject.name);
+                }
+            }
+        }
+
         private void DrawShmPreview()
         {
-            if (!showShmPreview || sharedMemoryReceiver == null || sharedMemoryReceiver.StereoTexture == null)
+            if (_isMode4Active || !showShmPreview || sharedMemoryReceiver == null || sharedMemoryReceiver.StereoTexture == null)
             {
                 return;
             }
@@ -500,8 +878,9 @@ namespace Pano2StereoVR
                 }
             }
 
-            if (sharedMemoryReceiver == null)
+            if (_isMode4Active || sharedMemoryReceiver == null)
             {
+                _shmReceiveFps = 0f;
                 return;
             }
 
@@ -554,7 +933,7 @@ namespace Pano2StereoVR
 
             try
             {
-                string escapedDetail = detail.Replace("\"", "\\\"");
+                string escapedDetail = (detail ?? string.Empty).Replace("\"", "\\\"");
                 string timestamp = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
                 string line = "{\"ts\":\"" + timestamp
                     + "\",\"event\":\"" + eventType
@@ -587,3 +966,10 @@ namespace Pano2StereoVR
         }
     }
 }
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
@@ -53,10 +53,14 @@ namespace Pano2StereoVR
         private float _currentIpd;
         private bool _pendingInitialIpdSync;
         private bool _isMode4Active;
+        private string _rtspUrlInput = string.Empty;
+        private bool _isRtspUrlFieldFocused;
+        private bool _clearRtspUrlFieldFocus;
 
         private const int ModeMin = 1;
         private const int ModeMax = 4;
         private const int Mode4Baseline = 4;
+        private const string RtspUrlFieldControlName = "Mode4RtspUrlField";
 
         public long RequestedSwitchCount { get; private set; }
         public long AppliedSwitchCount { get; private set; }
@@ -89,6 +93,9 @@ namespace Pano2StereoVR
             _currentIpd = Mathf.Clamp(ipdDefault, ipdMin, ipdMax);
             _pendingInitialIpdSync = true;
             _isMode4Active = false;
+            SyncRtspUrlInputFromReceiver();
+            _isRtspUrlFieldFocused = false;
+            _clearRtspUrlFieldFocus = false;
             if (udpGazeSender != null)
             {
                 udpGazeSender.ModeMessageSent += OnModeSent;
@@ -149,13 +156,22 @@ namespace Pano2StereoVR
 
         private void Update()
         {
+            UpdateOverlayFps();
+
+            if (_isRtspUrlFieldFocused)
+            {
+                if (Input.GetKeyDown(quitKey))
+                {
+                    _clearRtspUrlFieldFocus = true;
+                }
+                return;
+            }
+
             if (Input.GetKeyDown(quitKey))
             {
                 RequestQuit();
                 return;
             }
-
-            UpdateOverlayFps();
 
             if (Input.GetKeyDown(mode1Key))
             {
@@ -265,15 +281,27 @@ namespace Pano2StereoVR
                 margin = new RectOffset(0, 0, 0, 0),
                 padding = new RectOffset(6, 6, 1, 1)
             };
+            GUIStyle compactTextFieldStyle = new GUIStyle(GUI.skin.textField)
+            {
+                margin = new RectOffset(0, 0, 0, 0),
+                padding = new RectOffset(4, 4, 2, 2)
+            };
+            GUIStyle warningLabelStyle = new GUIStyle(wrapLabelStyle)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            warningLabelStyle.normal.textColor = new Color(1.0f, 0.78f, 0.35f);
 
+            string mode4PromptMessage = GetMode4PromptMessage();
+            bool hasRtspPrompt = _isMode4Active && !string.IsNullOrEmpty(mode4PromptMessage);
             bool hasRtspError = _isMode4Active
                 && rtspBaselineReceiver != null
                 && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError);
             float boxHeight = CalculateCompactOverlayHeight();
             float columnGap = 6f;
             float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 228f : 208f;
-            float column2Width = _isMode4Active ? 220f : 212f;
-            float column3Width = hasRtspError ? 380f : 300f;
+            float column2Width = _isMode4Active ? 216f : 212f;
+            float column3Width = (hasRtspPrompt || hasRtspError) ? 440f : (_isMode4Active ? 390f : 300f);
             float desiredInnerWidth = column1Width + column2Width + column3Width + columnGap * 2f;
             float maxInnerWidth = Screen.width - 48f;
             float widthScale = desiredInnerWidth > maxInnerWidth ? maxInnerWidth / desiredInnerWidth : 1f;
@@ -304,7 +332,7 @@ namespace Pano2StereoVR
             );
             if (_lastAppliedLatencyMs >= 0f)
             {
-                GUILayout.Label("Latency: " + _lastAppliedLatencyMs.ToString("F1") + " ms", compactLabelStyle);
+                GUILayout.Label("Mode Switch Latency: " + _lastAppliedLatencyMs.ToString("F1") + " ms", compactLabelStyle);
             }
             GUILayout.BeginHorizontal();
             GUILayout.Label(
@@ -323,13 +351,20 @@ namespace Pano2StereoVR
                 ResetIpdToDefault();
             }
             GUILayout.EndHorizontal();
-            if (headPoseTracker != null && headPoseTracker.IsDebugOverrideActive)
+            if (headPoseTracker != null)
             {
-                GUILayout.Label("View: DebugOverride", compactLabelStyle);
-                GUILayout.Label(
-                    "Debug u0: " + FormatVector(headPoseTracker.DebugOverrideVector),
-                    wrapLabelStyle
-                );
+                GUILayout.Label("View: " + headPoseTracker.CurrentPoseSourceLabel, compactLabelStyle);
+                if (headPoseTracker.IsMouseLookEnabled)
+                {
+                    GUILayout.Label("Mouse: M toggle, RMB drag", compactLabelStyle);
+                }
+                if (headPoseTracker.IsDebugOverrideActive)
+                {
+                    GUILayout.Label(
+                        "Debug u0: " + FormatVector(headPoseTracker.DebugOverrideVector),
+                        wrapLabelStyle
+                    );
+                }
             }
             GUILayout.EndVertical();
 
@@ -425,6 +460,14 @@ namespace Pano2StereoVR
                         compactLabelStyle
                     );
                 }
+                if (rtspBaselineReceiver != null)
+                {
+                    DrawRtspUrlEditor(compactLabelStyle, compactTextFieldStyle, compactButtonStyle);
+                }
+                if (!string.IsNullOrEmpty(mode4PromptMessage))
+                {
+                    GUILayout.Label(mode4PromptMessage, warningLabelStyle);
+                }
                 if (rtspBaselineReceiver != null && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError))
                 {
                     GUILayout.Label("Error: " + rtspBaselineReceiver.LastError, wrapLabelStyle);
@@ -455,6 +498,144 @@ namespace Pano2StereoVR
             GUILayout.EndArea();
 
             DrawShmPreview();
+        }
+
+        private void DrawRtspUrlEditor(
+            GUIStyle compactLabelStyle,
+            GUIStyle compactTextFieldStyle,
+            GUIStyle compactButtonStyle)
+        {
+            if (rtspBaselineReceiver == null)
+            {
+                _isRtspUrlFieldFocused = false;
+                _clearRtspUrlFieldFocus = false;
+                return;
+            }
+
+            GUILayout.Label("RTSP URL", compactLabelStyle);
+            GUILayout.BeginHorizontal();
+            GUI.SetNextControlName(RtspUrlFieldControlName);
+            string nextInput = GUILayout.TextField(
+                _rtspUrlInput ?? string.Empty,
+                compactTextFieldStyle,
+                GUILayout.MinWidth(180f),
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(20f));
+            if (!string.Equals(nextInput, _rtspUrlInput, StringComparison.Ordinal))
+            {
+                _rtspUrlInput = nextInput;
+            }
+            bool applyClicked = GUILayout.Button(
+                "Apply",
+                compactButtonStyle,
+                GUILayout.Width(54f),
+                GUILayout.Height(20f),
+                GUILayout.ExpandWidth(false));
+            GUILayout.EndHorizontal();
+
+            Event currentEvent = Event.current;
+            if (_clearRtspUrlFieldFocus)
+            {
+                GUI.FocusControl(string.Empty);
+                _clearRtspUrlFieldFocus = false;
+            }
+
+            _isRtspUrlFieldFocused = string.Equals(
+                GUI.GetNameOfFocusedControl(),
+                RtspUrlFieldControlName,
+                StringComparison.Ordinal);
+
+            if (_isRtspUrlFieldFocused
+                && currentEvent != null
+                && currentEvent.type == EventType.KeyDown
+                && currentEvent.keyCode == quitKey)
+            {
+                GUI.FocusControl(string.Empty);
+                _isRtspUrlFieldFocused = false;
+                currentEvent.Use();
+                return;
+            }
+
+            bool submitPressed = _isRtspUrlFieldFocused
+                && currentEvent != null
+                && currentEvent.type == EventType.KeyDown
+                && (currentEvent.keyCode == KeyCode.Return || currentEvent.keyCode == KeyCode.KeypadEnter);
+            if (submitPressed)
+            {
+                currentEvent.Use();
+            }
+
+            if (applyClicked || submitPressed)
+            {
+                ApplyRtspUrlInput();
+            }
+        }
+
+        private void SyncRtspUrlInputFromReceiver()
+        {
+            _rtspUrlInput = rtspBaselineReceiver != null ? rtspBaselineReceiver.StreamUrl : string.Empty;
+        }
+
+        private string GetMode4PromptMessage()
+        {
+            if (!_isMode4Active || rtspBaselineReceiver == null)
+            {
+                return string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(rtspBaselineReceiver.StreamUrl))
+            {
+                return "Mode4 requires an RTSP URL. Enter a stream address and press Apply.";
+            }
+
+            if (rtspBaselineReceiver.IsConnected)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrEmpty(rtspBaselineReceiver.LastError))
+            {
+                return "Mode4 cannot open the current RTSP stream. Check the address or server, then apply again.";
+            }
+
+            return "Mode4 is waiting for the RTSP stream. If no video appears, verify the address and stream server.";
+        }
+
+        private void ApplyRtspUrlInput()
+        {
+            if (rtspBaselineReceiver == null)
+            {
+                Debug.LogWarning("[ExperimentController] cannot apply RTSP URL without RTSP receiver.");
+                return;
+            }
+
+            string nextUrl = (_rtspUrlInput ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(nextUrl))
+            {
+                Debug.LogWarning("[ExperimentController] RTSP URL input is empty.");
+                WriteValidationEvent("mode4_url_rejected", Mode4Baseline, "empty_input");
+                return;
+            }
+
+            bool restartIfRunning = _isMode4Active;
+            bool changed = !string.Equals(rtspBaselineReceiver.StreamUrl, nextUrl, StringComparison.Ordinal);
+            if (!rtspBaselineReceiver.ApplyStreamUrl(nextUrl, restartIfRunning))
+            {
+                WriteValidationEvent("mode4_url_rejected", Mode4Baseline, "receiver_rejected");
+                return;
+            }
+
+            SyncRtspUrlInputFromReceiver();
+            _clearRtspUrlFieldFocus = true;
+            string details = "restart=" + FormatYesNo(restartIfRunning)
+                + ",changed=" + FormatYesNo(changed)
+                + ",url=" + rtspBaselineReceiver.DisplayUrl;
+            WriteValidationEvent("mode4_url_applied", Mode4Baseline, details);
+            Debug.Log(
+                "[ExperimentController] mode4 RTSP URL applied: "
+                + rtspBaselineReceiver.DisplayUrl
+                + (restartIfRunning ? " (receiver refreshed)" : " (saved)")
+            );
         }
 
         private int ResolveDisplayedMode()
@@ -501,13 +682,29 @@ namespace Pano2StereoVR
             {
                 column1Lines += 1;
             }
-            if (headPoseTracker != null && headPoseTracker.IsDebugOverrideActive)
+            if (headPoseTracker != null)
             {
-                column1Lines += 2;
+                column1Lines += 1;
+                if (headPoseTracker.IsMouseLookEnabled)
+                {
+                    column1Lines += 1;
+                }
+                if (headPoseTracker.IsDebugOverrideActive)
+                {
+                    column1Lines += 1;
+                }
             }
 
             int column2Lines = _isMode4Active ? 4 : 5;
             int column3Lines = 3;
+            if (_isMode4Active)
+            {
+                column3Lines += 2;
+            }
+            if (_isMode4Active && !string.IsNullOrEmpty(GetMode4PromptMessage()))
+            {
+                column3Lines += 3;
+            }
             if (_isMode4Active && rtspBaselineReceiver != null && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError))
             {
                 column3Lines += 2;
@@ -667,6 +864,7 @@ namespace Pano2StereoVR
             {
                 TryResolveReferences();
                 EnsureMode4Components();
+                SyncRtspUrlInputFromReceiver();
             }
 
             if (active && (rtspBaselineReceiver == null || baselinePanoramaRenderer == null))
@@ -710,6 +908,8 @@ namespace Pano2StereoVR
             {
                 _pendingInitialIpdSync = true;
                 _fpsWindowStartTime = -1f;
+                _isRtspUrlFieldFocused = false;
+                _clearRtspUrlFieldFocus = false;
             }
 
             WriteValidationEvent(active ? "mode4_enabled" : "mode4_disabled", Mode4Baseline, reason);

@@ -46,3 +46,6 @@ Pano2StereoVR/
 - This repo provides G3 Unity MVP scaffolding and core script skeletons.
 - G3 acceptance execution checklist: `docs/g3_acceptance.md`.
 - Performance backlog / TODO: `docs/TODO.md`.
+- In `Mode4`, the RTSP URL starts empty; enter a stream address at runtime, then click `Apply` or press `Enter` to reconnect.
+- If `Mode4` has no URL or the stream cannot be opened, the overlay shows an explicit warning prompt.
+- `Mode4` ffmpeg receive path now enables low-latency RTSP input options by default (`direct` I/O, reduced probe/analyze delay, zero max-delay, zero reorder queue).

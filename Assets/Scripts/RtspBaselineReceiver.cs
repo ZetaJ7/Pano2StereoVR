@@ -11,13 +11,19 @@ namespace Pano2StereoVR
     public sealed class RtspBaselineReceiver : MonoBehaviour
     {
         [SerializeField] private string ffmpegExecutable = "ffmpeg";
-        [SerializeField] private string rtspUrl = "rtsp://10.20.35.30:28552/test";
+        [SerializeField] private string rtspUrl = string.Empty;
         [SerializeField] [Min(16)] private int outputWidth = 1920;
         [SerializeField] [Min(16)] private int outputHeight = 1080;
         [SerializeField] private bool autoStartOnEnable = true;
         [SerializeField] private bool preferTcpTransport = true;
         [SerializeField] [Min(0f)] private float maxDecodeFps = 0f;
         [SerializeField] [Min(100)] private int reconnectDelayMs = 1000;
+        [SerializeField] private bool enableLowLatencyInputOptions = true;
+        [SerializeField] private bool useDirectIo = true;
+        [SerializeField] [Min(0)] private int probeSizeBytes = 32768;
+        [SerializeField] [Min(0)] private int analyzeDurationUs = 0;
+        [SerializeField] [Min(0)] private int maxDelayUs = 0;
+        [SerializeField] [Min(0)] private int reorderQueueSize = 0;
         [SerializeField] private bool verboseFfmpegLog = false;
         [SerializeField] private bool allowRuntimeOverrides = true;
         [SerializeField] private string rtspUrlArgName = "--rtsp-url";
@@ -73,6 +79,33 @@ namespace Pano2StereoVR
         }
 
         public string DisplayUrl => SanitizeRtspUrl(rtspUrl);
+
+        public bool ApplyStreamUrl(string newUrl, bool restartIfRunning)
+        {
+            string trimmed = (newUrl ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                SetLastError("[RtspBaselineReceiver] empty RTSP URL.");
+                return false;
+            }
+
+            bool shouldRestart = restartIfRunning && (_isRunning || _workerThread != null);
+            rtspUrl = trimmed;
+            SetLastError(string.Empty);
+
+            if (shouldRestart)
+            {
+                StopReceiver();
+                StartReceiver();
+            }
+
+            UnityEngine.Debug.Log(
+                "[RtspBaselineReceiver] RTSP URL updated: "
+                + DisplayUrl
+                + (shouldRestart ? " (receiver restarted)" : string.Empty)
+            );
+            return true;
+        }
 
         private void Awake()
         {
@@ -409,6 +442,28 @@ namespace Pano2StereoVR
             sb.Append("-loglevel ");
             sb.Append(verboseFfmpegLog ? "info " : "warning ");
             sb.Append("-fflags nobuffer -flags low_delay ");
+            if (enableLowLatencyInputOptions)
+            {
+                if (useDirectIo)
+                {
+                    sb.Append("-avioflags direct ");
+                }
+                if (probeSizeBytes > 0)
+                {
+                    sb.Append("-probesize ")
+                        .Append(probeSizeBytes.ToString(CultureInfo.InvariantCulture))
+                        .Append(' ');
+                }
+                sb.Append("-analyzeduration ")
+                    .Append(analyzeDurationUs.ToString(CultureInfo.InvariantCulture))
+                    .Append(' ');
+                sb.Append("-max_delay ")
+                    .Append(maxDelayUs.ToString(CultureInfo.InvariantCulture))
+                    .Append(' ');
+                sb.Append("-reorder_queue_size ")
+                    .Append(reorderQueueSize.ToString(CultureInfo.InvariantCulture))
+                    .Append(' ');
+            }
             sb.Append("-rtsp_transport ").Append(transport).Append(' ');
             sb.Append("-i ").Append('"').Append(EscapeForQuotes(rtspUrl)).Append("\" ");
             sb.Append("-an -sn -dn ");

@@ -37,6 +37,10 @@ namespace Pano2StereoVR
             public int Height { get; }
             public string DisplayText => Label + " " + Width.ToString(CultureInfo.InvariantCulture)
                 + "x" + Height.ToString(CultureInfo.InvariantCulture);
+            public int ShmWidth => Width * 2;
+            public int ShmHeight => Height;
+            public string ShmDisplayText => ShmWidth.ToString(CultureInfo.InvariantCulture)
+                + "x" + ShmHeight.ToString(CultureInfo.InvariantCulture);
         }
 
         [SerializeField] private SharedMemoryReceiver sharedMemoryReceiver;
@@ -100,6 +104,7 @@ namespace Pano2StereoVR
         private const string RtspUrlFieldControlName = "Mode4RtspUrlField";
         private const string XrSuperResolutionControllerTypeName =
             "Pano2StereoVR.XrSuperResolutionController, Assembly-CSharp";
+        private static readonly int[] ModeButtonOrder = { Mode4Baseline, 1, 2, 3 };
         private static readonly RuntimeResolutionSpec[] ResolutionSpecs =
         {
             new RuntimeResolutionSpec(RuntimeResolutionPreset.P1080, "1080", "1080", 2184, 1092),
@@ -358,7 +363,7 @@ namespace Pano2StereoVR
                 && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError);
             float boxHeight = CalculateCompactOverlayHeight();
             float columnGap = 8f;
-            float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 244f : 224f;
+            float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 380f : 344f;
             float column2Width = _isMode4Active ? 234f : 228f;
             float column3Width = (hasRtspPrompt || hasRtspError) ? 470f : (_isMode4Active ? 420f : 340f);
             float desiredInnerWidth = column1Width + column2Width + column3Width + columnGap * 2f;
@@ -383,6 +388,7 @@ namespace Pano2StereoVR
 
             GUILayout.BeginVertical(GUILayout.Width(column1Width));
             GUILayout.Label(displayedModeLabel, modeTitleStyle);
+            DrawModeButtonGroup(displayedMode, compactButtonStyle, compactLabelStyle);
             GUILayout.Label(
                 "Switch: req/sent/app "
                 + _lastRequestedMode + "/" + _lastSentMode + "/" + _lastAppliedMode
@@ -611,6 +617,7 @@ namespace Pano2StereoVR
                         : "waiting"),
                     compactLabelStyle
                 );
+                GUILayout.Label("SHM expected: " + spec.ShmDisplayText, compactLabelStyle);
             }
 
             string warning = GetResolutionWarningMessage(spec);
@@ -849,12 +856,24 @@ namespace Pano2StereoVR
                 return "Start Python with --downsample " + spec.DownsampleArgument + ".";
             }
 
-            if (sharedMemoryReceiver.Width == spec.Width && sharedMemoryReceiver.Height == spec.Height)
+            if (DoesShmResolutionMatchPreset(
+                    spec.Preset,
+                    sharedMemoryReceiver.Width,
+                    sharedMemoryReceiver.Height))
             {
                 return string.Empty;
             }
 
             return "SHM mismatch. Restart Python with --downsample " + spec.DownsampleArgument + ".";
+        }
+
+        private static bool DoesShmResolutionMatchPreset(
+            RuntimeResolutionPreset preset,
+            int shmWidth,
+            int shmHeight)
+        {
+            RuntimeResolutionSpec spec = GetResolutionSpec(preset);
+            return shmWidth == spec.ShmWidth && shmHeight == spec.ShmHeight;
         }
 
         private static RuntimeResolutionPreset NormalizeResolutionPreset(RuntimeResolutionPreset preset)
@@ -951,9 +970,62 @@ namespace Pano2StereoVR
             }
         }
 
+        private static int[] GetModeButtonOrder()
+        {
+            return (int[])ModeButtonOrder.Clone();
+        }
+
+        private void DrawModeButtonGroup(
+            int displayedMode,
+            GUIStyle compactButtonStyle,
+            GUIStyle compactLabelStyle)
+        {
+            GUILayout.BeginHorizontal();
+            for (int index = 0; index < ModeButtonOrder.Length; index++)
+            {
+                int mode = ModeButtonOrder[index];
+                DrawModeButton(mode, displayedMode, compactButtonStyle);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Keys: 4/1/2/3", compactLabelStyle);
+        }
+
+        private void DrawModeButton(
+            int mode,
+            int displayedMode,
+            GUIStyle compactButtonStyle)
+        {
+            string label = GetModeOverlayLabel(mode);
+            string text = displayedMode == mode ? "[" + label + "]" : label;
+            if (GUILayout.Button(
+                    text,
+                    compactButtonStyle,
+                    GUILayout.Width(GetModeButtonWidth(mode)),
+                    GUILayout.Height(20f),
+                    GUILayout.ExpandWidth(false)))
+            {
+                RequestModeSwitch(mode);
+            }
+        }
+
+        private static float GetModeButtonWidth(int mode)
+        {
+            switch (mode)
+            {
+                case 2:
+                    return 112f;
+                case 3:
+                    return 92f;
+                case 4:
+                    return 76f;
+                default:
+                    return 54f;
+            }
+        }
+
         private float CalculateCompactOverlayHeight()
         {
-            int column1Lines = 3;
+            int column1Lines = 5;
             if (_lastAppliedLatencyMs >= 0f)
             {
                 column1Lines += 1;
@@ -971,7 +1043,7 @@ namespace Pano2StereoVR
                 }
             }
 
-            int column2Lines = _isMode4Active ? 4 : 5;
+            int column2Lines = _isMode4Active ? 4 : 6;
             if (xrSuperResolutionController != null)
             {
                 if (!string.IsNullOrEmpty(GetOptionalStringProperty(

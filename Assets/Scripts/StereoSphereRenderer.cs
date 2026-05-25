@@ -168,11 +168,11 @@ namespace Pano2StereoVR
             }
         }
 
-        private void EnsureMaterialReady()
+        private bool EnsureMaterialReady()
         {
             if (!autoAssignStereoMaterial || targetRenderer == null)
             {
-                return;
+                return false;
             }
 
             Material current = targetRenderer.sharedMaterial;
@@ -180,16 +180,17 @@ namespace Pano2StereoVR
                 && current.shader != null
                 && current.shader.name == "Pano2Stereo/StereoPanorama")
             {
-                return;
+                return false;
             }
 
             Shader shader = Shader.Find("Pano2Stereo/StereoPanorama");
             if (shader == null)
             {
-                return;
+                return false;
             }
 
             targetRenderer.material = new Material(shader);
+            return true;
         }
 
         private void UpdateVisibilityDiagnostics()
@@ -228,9 +229,12 @@ namespace Pano2StereoVR
                 return;
             }
 
-            EnsureMaterialReady();
+            if (EnsureMaterialReady())
+            {
+                _lastTexture = null;
+            }
             Material material = targetRenderer.material;
-            if (_lastTexture != texture)
+            if (_lastTexture != texture || material.GetTexture(_texturePropertyId) != texture)
             {
                 material.SetTexture(_texturePropertyId, texture);
                 _lastTexture = texture;

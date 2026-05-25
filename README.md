@@ -29,15 +29,18 @@ Pano2StereoVR/
 ## Quick Start
 
 1. Open this folder with Unity Hub.
-2. Install dependencies from `Packages/manifest.json`.
-3. Create a scene and attach:
+2. Choose runtime target:
+   - `Tools/Pano2StereoVR/Runtime Target/VR OpenXR` for headset experiments.
+   - `Tools/Pano2StereoVR/Runtime Target/Desktop Screen` for screen-only M2P tests without starting SteamVR/HMD.
+3. Install dependencies from `Packages/manifest.json`.
+4. Create a scene and attach:
    - `SharedMemoryReceiver`
    - `StereoSphereRenderer`
    - `HeadPoseTracker`
    - `UdpGazeSender`
    - `ExperimentController`
-4. Use shader `Pano2Stereo/StereoPanorama` on an inverted sphere material.
-5. Start Python server with shared memory + UDP enabled:
+5. Use shader `Pano2Stereo/StereoPanorama` on an inverted sphere material.
+6. Start Python server with shared memory + UDP enabled:
    - `python src/pano2stereo.py --source Data/test1.mp4 --provider da2 --repair-method hachaj_fast_gpu --downsample 1080 --output-method shm --shm-name pano2stereo --gaze-udp-port 50051 --experiment-mode 3 --shm-fps-cap 0 --shm-fps-cap-fast 0 --experiment-logging`
 
 ## Current Runtime Conditions
@@ -51,3 +54,5 @@ Pano2StereoVR/
 - If `Baseline` has no URL or the stream cannot be opened, the overlay shows an explicit warning prompt.
 - `Baseline` ffmpeg receive path enables low-latency RTSP input options by default (`direct` I/O, reduced probe/analyze delay, zero max-delay, zero reorder queue).
 - Runtime resolution presets: `1080` (`2184x1092`), `2K` (`2884x1442`), and `4K` (`5768x2884`). Use overlay buttons or `F5`/`F6` to cycle. In SHM modes, restart Python with matching `--downsample`; in `Baseline`, the RTSP receiver restarts with the selected output size.
+- Runtime target is selectable in the Unity editor. `VR OpenXR` starts OpenXR automatically. `Desktop Screen` disables automatic XR startup so Play mode can render to the Game window without SteamVR/HMD.
+- In desktop/no-HMD runs, `HeadPoseTracker` enables mouse look by default. Hold right mouse button and drag to change the screen-center pose vector; press `M` to toggle mouse look.

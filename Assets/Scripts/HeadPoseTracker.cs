@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR;
+using UnityEngine.XR.Management;
 
 namespace Pano2StereoVR
 {
@@ -21,6 +22,7 @@ namespace Pano2StereoVR
         [SerializeField] private bool preferXrNodePose = true;
         [SerializeField] private bool logPoseSourceChanges = true;
         [SerializeField] private bool enableMouseLook = true;
+        [SerializeField] private bool autoEnableMouseLookWithoutXr = true;
         [SerializeField] private KeyCode toggleMouseLookKey = KeyCode.M;
         [SerializeField] private bool requireRightMouseButton = true;
         [SerializeField] private bool lockCursorWhileMouseLooking = true;
@@ -55,6 +57,7 @@ namespace Pano2StereoVR
         private void Awake()
         {
             EnsureHeadTransform();
+            InitializeMouseLookDefault();
         }
 
         private void OnDisable()
@@ -180,6 +183,44 @@ namespace Pano2StereoVR
                 + (_mouseLookEnabled ? "enabled" : "disabled")
                 + " (toggle=" + toggleMouseLookKey + ")"
             );
+        }
+
+        private void InitializeMouseLookDefault()
+        {
+            if (!ShouldAutoEnableMouseLook(
+                    autoEnableMouseLookWithoutXr,
+                    enableMouseLook,
+                    preferXrNodePose,
+                    IsXrConfiguredToStart()))
+            {
+                return;
+            }
+
+            SetMouseLookEnabled(true);
+        }
+
+        private static bool ShouldAutoEnableMouseLook(
+            bool autoEnableWithoutXr,
+            bool mouseLookAllowed,
+            bool xrPosePreferred,
+            bool xrConfiguredToStart)
+        {
+            if (!autoEnableWithoutXr || !mouseLookAllowed)
+            {
+                return false;
+            }
+            return !(xrPosePreferred && xrConfiguredToStart);
+        }
+
+        private static bool IsXrConfiguredToStart()
+        {
+            XRGeneralSettings generalSettings = XRGeneralSettings.Instance;
+            if (generalSettings != null)
+            {
+                return generalSettings.InitManagerOnStart;
+            }
+
+            return XRSettings.enabled;
         }
 
         private void EnsureHeadTransform()

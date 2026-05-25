@@ -6,6 +6,15 @@
 - XR Plugin: OpenXR
 - Runtime: SteamVR OpenXR runtime (or your target OpenXR runtime)
 
+## 1.1) Runtime Target
+
+Use the Unity menu before entering Play mode:
+
+- `Tools/Pano2StereoVR/Runtime Target/VR OpenXR`: enables OpenXR automatic startup. Use this for headset experiments and SteamVR mirror capture.
+- `Tools/Pano2StereoVR/Runtime Target/Desktop Screen`: disables OpenXR automatic startup. Use this for screen-only M2P tests when SteamVR/HMD is not started.
+
+`Desktop Screen` renders to the Unity Game window. When no XR head pose is available, `HeadPoseTracker` enables mouse look by default. Hold right mouse button and drag to change the screen-center pose vector; press `M` to toggle mouse look. This does not provide real HMD pose. Use `VR OpenXR` when the measured condition depends on physical head tracking.
+
 ## 2) Scene Baseline
 
 - Create an inverted sphere around camera rig.

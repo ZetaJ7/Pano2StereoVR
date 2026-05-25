@@ -10,11 +10,20 @@ namespace Pano2StereoVR.Editor
     [InitializeOnLoad]
     public static class OpenXRBootstrap
     {
+        private enum RuntimeTarget
+        {
+            DesktopScreen,
+            VrOpenXr,
+        }
+
         private const string SettingsStorePath = "Assets/XR/Settings/XRGeneralSettingsPerBuildTarget.asset";
         private const string OpenXRLoaderPath = "Assets/XR/Loaders/OpenXRLoader.asset";
         private const string OpenXRSettingsPath = "Assets/XR/Settings/OpenXR Package Settings.asset";
         private const string OpenXRSettingsKey = "com.unity.xr.openxr.settings4";
-        private const string MenuPath = "Tools/Pano2StereoVR/Fix OpenXR Setup";
+        private const string RuntimeTargetPrefKey = "Pano2StereoVR.OpenXRBootstrap.RuntimeTarget";
+        private const string FixOpenXRMenuPath = "Tools/Pano2StereoVR/Fix OpenXR Setup";
+        private const string DesktopScreenMenuPath = "Tools/Pano2StereoVR/Runtime Target/Desktop Screen";
+        private const string VrOpenXrMenuPath = "Tools/Pano2StereoVR/Runtime Target/VR OpenXR";
 
         static OpenXRBootstrap()
         {
@@ -23,16 +32,61 @@ namespace Pano2StereoVR.Editor
 
         private static void EnsureOpenXRConfiguredDelayed()
         {
-            EnsureOpenXRConfigured(false);
+            ApplyRuntimeTarget(GetRuntimeTarget(), false);
         }
 
-        [MenuItem(MenuPath)]
+        [MenuItem(FixOpenXRMenuPath)]
         private static void EnsureOpenXRConfiguredFromMenu()
         {
-            EnsureOpenXRConfigured(true);
+            SetRuntimeTarget(RuntimeTarget.VrOpenXr, true);
         }
 
-        private static void EnsureOpenXRConfigured(bool forceLog = false)
+        [MenuItem(DesktopScreenMenuPath)]
+        private static void SelectDesktopScreen()
+        {
+            SetRuntimeTarget(RuntimeTarget.DesktopScreen, true);
+        }
+
+        [MenuItem(DesktopScreenMenuPath, true)]
+        private static bool ValidateDesktopScreen()
+        {
+            Menu.SetChecked(DesktopScreenMenuPath, GetRuntimeTarget() == RuntimeTarget.DesktopScreen);
+            return true;
+        }
+
+        [MenuItem(VrOpenXrMenuPath)]
+        private static void SelectVrOpenXr()
+        {
+            SetRuntimeTarget(RuntimeTarget.VrOpenXr, true);
+        }
+
+        [MenuItem(VrOpenXrMenuPath, true)]
+        private static bool ValidateVrOpenXr()
+        {
+            Menu.SetChecked(VrOpenXrMenuPath, GetRuntimeTarget() == RuntimeTarget.VrOpenXr);
+            return true;
+        }
+
+        private static void SetRuntimeTarget(RuntimeTarget target, bool forceLog)
+        {
+            EditorPrefs.SetString(RuntimeTargetPrefKey, target.ToString());
+            ApplyRuntimeTarget(target, forceLog);
+        }
+
+        private static RuntimeTarget GetRuntimeTarget()
+        {
+            string rawValue = EditorPrefs.GetString(
+                RuntimeTargetPrefKey,
+                RuntimeTarget.VrOpenXr.ToString()
+            );
+            if (System.Enum.TryParse(rawValue, out RuntimeTarget target))
+            {
+                return target;
+            }
+            return RuntimeTarget.VrOpenXr;
+        }
+
+        private static void ApplyRuntimeTarget(RuntimeTarget target, bool forceLog = false)
         {
             bool changed = false;
             XRGeneralSettingsPerBuildTarget settingsPerBuildTarget =
@@ -57,44 +111,24 @@ namespace Pano2StereoVR.Editor
                 return;
             }
 
-            OpenXRLoader openXRLoader = AssetDatabase.LoadAssetAtPath<OpenXRLoader>(OpenXRLoaderPath);
-            if (openXRLoader == null)
+            if (target == RuntimeTarget.VrOpenXr && !EnsureOpenXRLoader(managerSettings, ref changed, forceLog))
             {
-                if (forceLog)
-                {
-                    Debug.LogError("[OpenXRBootstrap] OpenXRLoader asset is missing.");
-                }
                 return;
             }
 
-            if (managerSettings.activeLoaders.Count != 1 || managerSettings.activeLoaders[0] != openXRLoader)
-            {
-                managerSettings.TrySetLoaders(new List<XRLoader> { openXRLoader });
-                changed = true;
-            }
-
-            if (!managerSettings.automaticLoading)
-            {
-                managerSettings.automaticLoading = true;
-                changed = true;
-            }
-
-            if (!managerSettings.automaticRunning)
-            {
-                managerSettings.automaticRunning = true;
-                changed = true;
-            }
-
+            bool autoStartXr = ShouldAutoStartXr(target);
+            ApplyManagerAutomaticStartup(managerSettings, autoStartXr, ref changed);
             XRGeneralSettings standaloneGeneralSettings =
                 settingsPerBuildTarget.SettingsForBuildTarget(BuildTargetGroup.Standalone);
-            if (standaloneGeneralSettings != null && !standaloneGeneralSettings.InitManagerOnStart)
+            if (standaloneGeneralSettings != null &&
+                standaloneGeneralSettings.InitManagerOnStart != autoStartXr)
             {
-                standaloneGeneralSettings.InitManagerOnStart = true;
+                standaloneGeneralSettings.InitManagerOnStart = autoStartXr;
                 EditorUtility.SetDirty(standaloneGeneralSettings);
                 changed = true;
             }
 
-            if (EnsureOpenXRSettingsConfigObject())
+            if (target == RuntimeTarget.VrOpenXr && EnsureOpenXRSettingsConfigObject())
             {
                 changed = true;
             }
@@ -109,7 +143,58 @@ namespace Pano2StereoVR.Editor
 
             if (changed || forceLog)
             {
-                Debug.Log("[OpenXRBootstrap] OpenXR setup verified for Standalone.");
+                Debug.Log(
+                    "[OpenXRBootstrap] Runtime target set to " + target
+                    + " (XR auto-start=" + autoStartXr + ")."
+                );
+            }
+        }
+
+        private static bool ShouldAutoStartXr(RuntimeTarget target)
+        {
+            return target == RuntimeTarget.VrOpenXr;
+        }
+
+        private static bool EnsureOpenXRLoader(
+            XRManagerSettings managerSettings,
+            ref bool changed,
+            bool forceLog)
+        {
+            OpenXRLoader openXRLoader = AssetDatabase.LoadAssetAtPath<OpenXRLoader>(OpenXRLoaderPath);
+            if (openXRLoader == null)
+            {
+                if (forceLog)
+                {
+                    Debug.LogError("[OpenXRBootstrap] OpenXRLoader asset is missing.");
+                }
+                return false;
+            }
+
+            if (managerSettings.activeLoaders.Count == 1 && managerSettings.activeLoaders[0] == openXRLoader)
+            {
+                return true;
+            }
+
+            managerSettings.TrySetLoaders(new List<XRLoader> { openXRLoader });
+            changed = true;
+            return true;
+        }
+
+        private static void ApplyManagerAutomaticStartup(
+            XRManagerSettings managerSettings,
+            bool autoStartXr,
+            ref bool changed)
+        {
+            if (managerSettings.automaticLoading != autoStartXr)
+            {
+                managerSettings.automaticLoading = autoStartXr;
+                changed = true;
+            }
+
+            if (managerSettings.automaticRunning != autoStartXr)
+            {
+                managerSettings.automaticRunning = autoStartXr;
+                changed = true;
             }
         }
 

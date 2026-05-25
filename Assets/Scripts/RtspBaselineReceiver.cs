@@ -14,6 +14,7 @@ namespace Pano2StereoVR
         [SerializeField] private string rtspUrl = string.Empty;
         [SerializeField] [Min(16)] private int outputWidth = 1920;
         [SerializeField] [Min(16)] private int outputHeight = 1080;
+        [SerializeField] [Min(1048576)] private int maxFrameBytes = 134217728;
         [SerializeField] private bool autoStartOnEnable = true;
         [SerializeField] private bool preferTcpTransport = true;
         [SerializeField] [Min(0f)] private float maxDecodeFps = 0f;
@@ -80,6 +81,55 @@ namespace Pano2StereoVR
 
         public string DisplayUrl => SanitizeRtspUrl(rtspUrl);
 
+        public bool ApplyOutputResolution(int width, int height, bool restartIfRunning)
+        {
+            if (!TryGetFrameBytes(width, height, out _))
+            {
+                SetLastError("[RtspBaselineReceiver] invalid output resolution.");
+                return false;
+            }
+
+            bool isActive = _isRunning || _workerThread != null;
+            if (isActive && !restartIfRunning)
+            {
+                SetLastError("[RtspBaselineReceiver] resolution change requires receiver restart.");
+                return false;
+            }
+
+            bool changed = outputWidth != width || outputHeight != height;
+            bool shouldRestart = changed && restartIfRunning && isActive;
+            if (!changed)
+            {
+                return true;
+            }
+
+            if (shouldRestart)
+            {
+                if (!StopReceiver())
+                {
+                    return false;
+                }
+            }
+
+            outputWidth = width;
+            outputHeight = height;
+            ClearBufferedFrameForResolutionChange();
+
+            if (shouldRestart)
+            {
+                StartReceiver();
+            }
+
+            UnityEngine.Debug.Log(
+                "[RtspBaselineReceiver] output resolution updated: "
+                + outputWidth.ToString(CultureInfo.InvariantCulture)
+                + "x"
+                + outputHeight.ToString(CultureInfo.InvariantCulture)
+                + (shouldRestart ? " (receiver restarted)" : string.Empty)
+            );
+            return true;
+        }
+
         public bool ApplyStreamUrl(string newUrl, bool restartIfRunning)
         {
             string trimmed = (newUrl ?? string.Empty).Trim();
@@ -90,12 +140,19 @@ namespace Pano2StereoVR
             }
 
             bool shouldRestart = restartIfRunning && (_isRunning || _workerThread != null);
+            if (shouldRestart)
+            {
+                if (!StopReceiver())
+                {
+                    return false;
+                }
+            }
+
             rtspUrl = trimmed;
             SetLastError(string.Empty);
 
             if (shouldRestart)
             {
-                StopReceiver();
                 StartReceiver();
             }
 
@@ -164,14 +221,16 @@ namespace Pano2StereoVR
             _workerThread.Start();
         }
 
-        public void StopReceiver()
+        public bool StopReceiver()
         {
             _stopRequested = true;
             StopFfmpegProcess();
 
+            bool stopped = true;
             if (_workerThread != null)
             {
-                if (!_workerThread.Join(1000))
+                stopped = _workerThread.Join(1000);
+                if (!stopped)
                 {
                     try
                     {
@@ -180,18 +239,37 @@ namespace Pano2StereoVR
                     catch (Exception)
                     {
                     }
+                    stopped = _workerThread.Join(250);
                 }
-                _workerThread = null;
+                if (stopped)
+                {
+                    _workerThread = null;
+                }
             }
 
-            _isConnected = false;
-            _isRunning = false;
+            if (stopped)
+            {
+                _isConnected = false;
+                _isRunning = false;
+            }
+            else
+            {
+                SetLastError("[RtspBaselineReceiver] receiver thread did not stop in time.");
+            }
+
+            return stopped;
         }
 
         private void WorkerLoop()
         {
             _isRunning = true;
-            int frameBytes = outputWidth * outputHeight * 3;
+            if (!TryGetFrameBytes(outputWidth, outputHeight, out int frameBytes))
+            {
+                SetLastError("[RtspBaselineReceiver] invalid output resolution.");
+                _isConnected = false;
+                _isRunning = false;
+                return;
+            }
             byte[] readBuffer = new byte[frameBytes];
 
             while (!_stopRequested)
@@ -253,6 +331,50 @@ namespace Pano2StereoVR
 
             _isConnected = false;
             _isRunning = false;
+        }
+
+        private void ClearBufferedFrameForResolutionChange()
+        {
+            lock (_stateLock)
+            {
+                _latestFrame = Array.Empty<byte>();
+                _latestFrameId = 0;
+                _appliedFrameId = 0;
+                _decodedFps = 0f;
+                _fpsWindowStartTime = -1f;
+                _fpsWindowStartDecodedFrames = Interlocked.Read(ref _decodedFrames);
+            }
+
+            if (_texture != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(_texture);
+                }
+                else
+                {
+                    DestroyImmediate(_texture);
+                }
+                _texture = null;
+            }
+        }
+
+        private bool TryGetFrameBytes(int width, int height, out int frameBytes)
+        {
+            frameBytes = 0;
+            if (width < 16 || height < 16)
+            {
+                return false;
+            }
+
+            long requiredBytes = (long)width * (long)height * 3L;
+            if (requiredBytes <= 0L || requiredBytes > maxFrameBytes || requiredBytes > int.MaxValue)
+            {
+                return false;
+            }
+
+            frameBytes = (int)requiredBytes;
+            return true;
         }
 
         private Process StartFfmpegProcess()

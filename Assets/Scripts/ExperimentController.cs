@@ -7,12 +7,46 @@ namespace Pano2StereoVR
 {
     public sealed class ExperimentController : MonoBehaviour
     {
+        private enum RuntimeResolutionPreset
+        {
+            P1080 = 0,
+            P2K = 1,
+            P4K = 2
+        }
+
+        private readonly struct RuntimeResolutionSpec
+        {
+            public RuntimeResolutionSpec(
+                RuntimeResolutionPreset preset,
+                string label,
+                string downsampleArgument,
+                int width,
+                int height)
+            {
+                Preset = preset;
+                Label = label;
+                DownsampleArgument = downsampleArgument;
+                Width = width;
+                Height = height;
+            }
+
+            public RuntimeResolutionPreset Preset { get; }
+            public string Label { get; }
+            public string DownsampleArgument { get; }
+            public int Width { get; }
+            public int Height { get; }
+            public string DisplayText => Label + " " + Width.ToString(CultureInfo.InvariantCulture)
+                + "x" + Height.ToString(CultureInfo.InvariantCulture);
+        }
+
         [SerializeField] private SharedMemoryReceiver sharedMemoryReceiver;
         [SerializeField] private UdpGazeSender udpGazeSender;
         [SerializeField] private HeadPoseTracker headPoseTracker;
         [SerializeField] private StereoSphereRenderer stereoSphereRenderer;
         [SerializeField] private RtspBaselineReceiver rtspBaselineReceiver;
         [SerializeField] private BaselinePanoramaRenderer baselinePanoramaRenderer;
+        [SerializeField] private MonoBehaviour xrSuperResolutionController;
+        [SerializeField] private bool autoCreateXrSuperResolutionController = false;
         [SerializeField] private KeyCode mode1Key = KeyCode.Alpha1;
         [SerializeField] private KeyCode mode2Key = KeyCode.Alpha2;
         [SerializeField] private KeyCode mode3Key = KeyCode.Alpha3;
@@ -23,6 +57,9 @@ namespace Pano2StereoVR
         [SerializeField] private KeyCode ipdDecreaseKey = KeyCode.Minus;
         [SerializeField] private KeyCode ipdDecreaseKeyAlt = KeyCode.KeypadMinus;
         [SerializeField] private KeyCode ipdResetKey = KeyCode.Alpha0;
+        [SerializeField] private RuntimeResolutionPreset resolutionPreset = RuntimeResolutionPreset.P1080;
+        [SerializeField] private KeyCode resolutionPreviousKey = KeyCode.F5;
+        [SerializeField] private KeyCode resolutionNextKey = KeyCode.F6;
         [SerializeField] private float ipdDefault = 0.065f;
         [SerializeField] private float ipdStep = 0.005f;
         [SerializeField] private float ipdMin = 0.0f;
@@ -61,6 +98,14 @@ namespace Pano2StereoVR
         private const int ModeMax = 4;
         private const int Mode4Baseline = 4;
         private const string RtspUrlFieldControlName = "Mode4RtspUrlField";
+        private const string XrSuperResolutionControllerTypeName =
+            "Pano2StereoVR.XrSuperResolutionController, Assembly-CSharp";
+        private static readonly RuntimeResolutionSpec[] ResolutionSpecs =
+        {
+            new RuntimeResolutionSpec(RuntimeResolutionPreset.P1080, "1080", "1080", 2184, 1092),
+            new RuntimeResolutionSpec(RuntimeResolutionPreset.P2K, "2K", "2k", 2884, 1442),
+            new RuntimeResolutionSpec(RuntimeResolutionPreset.P4K, "4K", "4k", 5768, 2884)
+        };
 
         public long RequestedSwitchCount { get; private set; }
         public long AppliedSwitchCount { get; private set; }
@@ -86,6 +131,7 @@ namespace Pano2StereoVR
         private void OnEnable()
         {
             TryResolveReferences();
+            resolutionPreset = NormalizeResolutionPreset(resolutionPreset);
             _fpsWindowStartTime = -1f;
             _fpsWindowStartAcceptedFrames = 0;
             _shmReceiveFps = 0f;
@@ -190,6 +236,15 @@ namespace Pano2StereoVR
                 RequestModeSwitch(Mode4Baseline);
             }
 
+            if (Input.GetKeyDown(resolutionPreviousKey))
+            {
+                CycleResolutionPreset(-1, "hotkey_previous");
+            }
+            if (Input.GetKeyDown(resolutionNextKey))
+            {
+                CycleResolutionPreset(1, "hotkey_next");
+            }
+
             if (_isMode4Active)
             {
                 return;
@@ -263,12 +318,14 @@ namespace Pano2StereoVR
             GUIStyle compactLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 margin = new RectOffset(0, 0, 0, 1),
-                padding = new RectOffset(0, 0, 0, 0)
+                padding = new RectOffset(0, 0, 0, 0),
+                fontSize = 14
             };
             GUIStyle titleStyle = new GUIStyle(compactLabelStyle)
             {
                 fontStyle = FontStyle.Bold,
-                margin = new RectOffset(0, 0, 0, 2)
+                margin = new RectOffset(0, 0, 0, 2),
+                fontSize = 15
             };
             GUIStyle modeTitleStyle = new GUIStyle(titleStyle);
             modeTitleStyle.normal.textColor = new Color(0.45f, 1.0f, 0.45f);
@@ -279,12 +336,14 @@ namespace Pano2StereoVR
             GUIStyle compactButtonStyle = new GUIStyle(GUI.skin.button)
             {
                 margin = new RectOffset(0, 0, 0, 0),
-                padding = new RectOffset(6, 6, 1, 1)
+                padding = new RectOffset(8, 8, 2, 2),
+                fontSize = 13
             };
             GUIStyle compactTextFieldStyle = new GUIStyle(GUI.skin.textField)
             {
                 margin = new RectOffset(0, 0, 0, 0),
-                padding = new RectOffset(4, 4, 2, 2)
+                padding = new RectOffset(5, 5, 3, 3),
+                fontSize = 13
             };
             GUIStyle warningLabelStyle = new GUIStyle(wrapLabelStyle)
             {
@@ -298,28 +357,28 @@ namespace Pano2StereoVR
                 && rtspBaselineReceiver != null
                 && !string.IsNullOrEmpty(rtspBaselineReceiver.LastError);
             float boxHeight = CalculateCompactOverlayHeight();
-            float columnGap = 6f;
-            float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 228f : 208f;
-            float column2Width = _isMode4Active ? 216f : 212f;
-            float column3Width = (hasRtspPrompt || hasRtspError) ? 440f : (_isMode4Active ? 390f : 300f);
+            float columnGap = 8f;
+            float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 244f : 224f;
+            float column2Width = _isMode4Active ? 234f : 228f;
+            float column3Width = (hasRtspPrompt || hasRtspError) ? 470f : (_isMode4Active ? 420f : 340f);
             float desiredInnerWidth = column1Width + column2Width + column3Width + columnGap * 2f;
-            float maxInnerWidth = Screen.width - 48f;
+            float maxInnerWidth = Screen.width - 32f;
             float widthScale = desiredInnerWidth > maxInnerWidth ? maxInnerWidth / desiredInnerWidth : 1f;
             column1Width *= widthScale;
             column2Width *= widthScale;
             column3Width *= widthScale;
             float innerWidth = desiredInnerWidth * widthScale;
-            float boxWidth = innerWidth + 16f;
+            float boxWidth = innerWidth + 20f;
             int displayedMode = ResolveDisplayedMode();
             string displayedModeLabel = GetModeOverlayLabel(displayedMode);
 
 
 
             GUI.color = Color.black;
-            GUI.Box(new Rect(16f, 16f, boxWidth, boxHeight), GUIContent.none);
+            GUI.Box(new Rect(12f, 12f, boxWidth, boxHeight), GUIContent.none);
             GUI.color = Color.white;
 
-            GUILayout.BeginArea(new Rect(24f, 22f, innerWidth, boxHeight - 10f));
+            GUILayout.BeginArea(new Rect(22f, 19f, innerWidth, boxHeight - 10f));
             GUILayout.BeginHorizontal();
 
             GUILayout.BeginVertical(GUILayout.Width(column1Width));
@@ -417,6 +476,26 @@ namespace Pano2StereoVR
                 GUILayout.Label("Texture: unbound", compactLabelStyle);
             }
 
+            if (xrSuperResolutionController != null)
+            {
+                string statusMessage = GetOptionalStringProperty(
+                    xrSuperResolutionController,
+                    "StatusMessage"
+                );
+                if (!string.IsNullOrEmpty(statusMessage))
+                {
+                    GUILayout.Label(statusMessage, wrapLabelStyle);
+                }
+                string hotkeyHint = GetOptionalStringProperty(
+                    xrSuperResolutionController,
+                    "HotkeyHint"
+                );
+                if (!string.IsNullOrEmpty(hotkeyHint))
+                {
+                    GUILayout.Label(hotkeyHint, compactLabelStyle);
+                }
+            }
+
             if (_isMode4Active)
             {
                 GUILayout.Label(
@@ -441,6 +520,7 @@ namespace Pano2StereoVR
 
             GUILayout.BeginVertical(GUILayout.Width(column3Width));
             GUILayout.Label("Receiver", titleStyle);
+            DrawResolutionControls(compactLabelStyle, compactButtonStyle, warningLabelStyle);
             if (_isMode4Active)
             {
                 if (rtspBaselineReceiver != null)
@@ -498,6 +578,64 @@ namespace Pano2StereoVR
             GUILayout.EndArea();
 
             DrawShmPreview();
+        }
+
+        private void DrawResolutionControls(
+            GUIStyle compactLabelStyle,
+            GUIStyle compactButtonStyle,
+            GUIStyle warningLabelStyle)
+        {
+            RuntimeResolutionSpec spec = GetResolutionSpec(resolutionPreset);
+            GUILayout.Label("Preset: " + spec.DisplayText, compactLabelStyle);
+            GUILayout.BeginHorizontal();
+            DrawResolutionButton(RuntimeResolutionPreset.P1080, "1080", compactButtonStyle);
+            DrawResolutionButton(RuntimeResolutionPreset.P2K, "2K", compactButtonStyle);
+            DrawResolutionButton(RuntimeResolutionPreset.P4K, "4K", compactButtonStyle);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Keys: " + resolutionPreviousKey + "/" + resolutionNextKey, compactLabelStyle);
+
+            if (_isMode4Active)
+            {
+                GUILayout.Label(
+                    "RTSP out: " + (rtspBaselineReceiver != null
+                        ? FormatResolution(rtspBaselineReceiver.OutputWidth, rtspBaselineReceiver.OutputHeight)
+                        : "unbound"),
+                    compactLabelStyle
+                );
+            }
+            else
+            {
+                GUILayout.Label(
+                    "SHM in: " + (sharedMemoryReceiver != null && sharedMemoryReceiver.Width > 0
+                        ? FormatResolution(sharedMemoryReceiver.Width, sharedMemoryReceiver.Height)
+                        : "waiting"),
+                    compactLabelStyle
+                );
+            }
+
+            string warning = GetResolutionWarningMessage(spec);
+            if (!string.IsNullOrEmpty(warning))
+            {
+                GUILayout.Label(warning, warningLabelStyle);
+            }
+        }
+
+        private void DrawResolutionButton(
+            RuntimeResolutionPreset preset,
+            string label,
+            GUIStyle compactButtonStyle)
+        {
+            bool selected = resolutionPreset == preset;
+            string text = selected ? "[" + label + "]" : label;
+            if (GUILayout.Button(
+                    text,
+                    compactButtonStyle,
+                    GUILayout.Width(52f),
+                    GUILayout.Height(20f),
+                    GUILayout.ExpandWidth(false)))
+            {
+                SetResolutionPreset(preset, "overlay");
+            }
         }
 
         private void DrawRtspUrlEditor(
@@ -638,6 +776,144 @@ namespace Pano2StereoVR
             );
         }
 
+        private void CycleResolutionPreset(int delta, string reason)
+        {
+            int currentIndex = GetResolutionSpecIndex(resolutionPreset);
+            int nextIndex = (currentIndex + delta + ResolutionSpecs.Length) % ResolutionSpecs.Length;
+            SetResolutionPreset(ResolutionSpecs[nextIndex].Preset, reason);
+        }
+
+        private void SetResolutionPreset(RuntimeResolutionPreset preset, string reason)
+        {
+            RuntimeResolutionPreset nextPreset = NormalizeResolutionPreset(preset);
+            RuntimeResolutionPreset previousPreset = resolutionPreset;
+            resolutionPreset = nextPreset;
+
+            RuntimeResolutionSpec spec = GetResolutionSpec(resolutionPreset);
+            bool changed = previousPreset != resolutionPreset;
+            if (_isMode4Active)
+            {
+                ApplySelectedResolutionToMode4(reason, true);
+            }
+            else
+            {
+                WriteValidationEvent(
+                    "resolution_selected",
+                    CurrentMode,
+                    BuildResolutionDetail(spec, reason, changed)
+                );
+            }
+
+            Debug.Log(
+                "[ExperimentController] resolution preset -> "
+                + spec.DisplayText
+                + " (--downsample " + spec.DownsampleArgument + ")"
+            );
+        }
+
+        private void ApplySelectedResolutionToMode4(string reason, bool restartIfRunning)
+        {
+            if (rtspBaselineReceiver == null)
+            {
+                WriteValidationEvent("resolution_rejected", Mode4Baseline, "rtsp_receiver_missing");
+                return;
+            }
+
+            RuntimeResolutionSpec spec = GetResolutionSpec(resolutionPreset);
+            bool changed = rtspBaselineReceiver.OutputWidth != spec.Width
+                || rtspBaselineReceiver.OutputHeight != spec.Height;
+            bool applied = rtspBaselineReceiver.ApplyOutputResolution(
+                spec.Width,
+                spec.Height,
+                restartIfRunning
+            );
+            WriteValidationEvent(
+                applied ? "resolution_applied" : "resolution_rejected",
+                Mode4Baseline,
+                BuildResolutionDetail(spec, reason, changed)
+                + ",restart=" + FormatYesNo(restartIfRunning)
+            );
+        }
+
+        private string GetResolutionWarningMessage(RuntimeResolutionSpec spec)
+        {
+            if (_isMode4Active)
+            {
+                return string.Empty;
+            }
+
+            if (sharedMemoryReceiver == null
+                || sharedMemoryReceiver.Width <= 0
+                || sharedMemoryReceiver.Height <= 0)
+            {
+                return "Start Python with --downsample " + spec.DownsampleArgument + ".";
+            }
+
+            if (sharedMemoryReceiver.Width == spec.Width && sharedMemoryReceiver.Height == spec.Height)
+            {
+                return string.Empty;
+            }
+
+            return "SHM mismatch. Restart Python with --downsample " + spec.DownsampleArgument + ".";
+        }
+
+        private static RuntimeResolutionPreset NormalizeResolutionPreset(RuntimeResolutionPreset preset)
+        {
+            for (int i = 0; i < ResolutionSpecs.Length; i++)
+            {
+                if (ResolutionSpecs[i].Preset == preset)
+                {
+                    return preset;
+                }
+            }
+            return RuntimeResolutionPreset.P1080;
+        }
+
+        private static RuntimeResolutionSpec GetResolutionSpec(RuntimeResolutionPreset preset)
+        {
+            RuntimeResolutionPreset normalized = NormalizeResolutionPreset(preset);
+            for (int i = 0; i < ResolutionSpecs.Length; i++)
+            {
+                if (ResolutionSpecs[i].Preset == normalized)
+                {
+                    return ResolutionSpecs[i];
+                }
+            }
+            return ResolutionSpecs[0];
+        }
+
+        private static int GetResolutionSpecIndex(RuntimeResolutionPreset preset)
+        {
+            RuntimeResolutionPreset normalized = NormalizeResolutionPreset(preset);
+            for (int i = 0; i < ResolutionSpecs.Length; i++)
+            {
+                if (ResolutionSpecs[i].Preset == normalized)
+                {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        private static string BuildResolutionDetail(
+            RuntimeResolutionSpec spec,
+            string reason,
+            bool changed)
+        {
+            return "preset=" + spec.Label
+                + ",size=" + FormatResolution(spec.Width, spec.Height)
+                + ",downsample=" + spec.DownsampleArgument
+                + ",reason=" + reason
+                + ",changed=" + FormatYesNo(changed);
+        }
+
+        private static string FormatResolution(int width, int height)
+        {
+            return width.ToString(CultureInfo.InvariantCulture)
+                + "x"
+                + height.ToString(CultureInfo.InvariantCulture);
+        }
+
         private int ResolveDisplayedMode()
         {
             if (_isMode4Active)
@@ -663,11 +939,11 @@ namespace Pano2StereoVR
             switch (mode)
             {
                 case 1:
-                    return "MONO";
+                    return "Mono";
                 case 2:
-                    return "Stereo";
+                    return "Pose-agnostic";
                 case 3:
-                    return "Stereo+HMD";
+                    return "Pose-aware";
                 case 4:
                     return "Baseline";
                 default:
@@ -696,8 +972,27 @@ namespace Pano2StereoVR
             }
 
             int column2Lines = _isMode4Active ? 4 : 5;
-            int column3Lines = 3;
+            if (xrSuperResolutionController != null)
+            {
+                if (!string.IsNullOrEmpty(GetOptionalStringProperty(
+                        xrSuperResolutionController,
+                        "StatusMessage")))
+                {
+                    column2Lines += 1;
+                }
+                if (!string.IsNullOrEmpty(GetOptionalStringProperty(
+                        xrSuperResolutionController,
+                        "HotkeyHint")))
+                {
+                    column2Lines += 1;
+                }
+            }
+            int column3Lines = 6;
             if (_isMode4Active)
+            {
+                column3Lines += 3;
+            }
+            else if (!string.IsNullOrEmpty(GetResolutionWarningMessage(GetResolutionSpec(resolutionPreset))))
             {
                 column3Lines += 2;
             }
@@ -711,9 +1006,9 @@ namespace Pano2StereoVR
             }
 
             int maxLines = Mathf.Max(column1Lines, Mathf.Max(column2Lines, column3Lines));
-            float lineHeight = 16f;
-            float chromeHeight = 20f;
-            return Mathf.Min(chromeHeight + maxLines * lineHeight, Screen.height * 0.30f);
+            float lineHeight = 18f;
+            float chromeHeight = 24f;
+            return Mathf.Min(chromeHeight + maxLines * lineHeight, Screen.height * 0.42f);
         }
 
         private static string FormatYesNo(bool value)
@@ -829,8 +1124,8 @@ namespace Pano2StereoVR
             _lastAppliedLatencyMs = 0f;
             _lastAppliedMode = Mode4Baseline;
             AppliedSwitchCount += 1;
-            WriteValidationEvent("mode_applied", Mode4Baseline, "local_baseline", 0f);
-            Debug.Log("[ExperimentController] mode applied -> 4 (local baseline)");
+            WriteValidationEvent("mode_applied", Mode4Baseline, "baseline", 0f);
+            Debug.Log("[ExperimentController] mode applied -> 4 (Baseline)");
         }
 
         private void SendCurrentIpd(string reason)
@@ -872,6 +1167,11 @@ namespace Pano2StereoVR
                 Debug.LogWarning("[ExperimentController] cannot enable mode 4 without RTSP receiver and mono renderer.");
                 WriteValidationEvent("mode_request_failed", Mode4Baseline, "mode4_components_missing");
                 return;
+            }
+
+            if (active)
+            {
+                ApplySelectedResolutionToMode4(reason, true);
             }
 
             _isMode4Active = active;
@@ -996,10 +1296,52 @@ namespace Pano2StereoVR
             {
                 baselinePanoramaRenderer = FindObjectOfType<BaselinePanoramaRenderer>();
             }
+            if (xrSuperResolutionController == null)
+            {
+                TryResolveOptionalXrSuperResolutionController();
+            }
             if (headPoseTracker == null && udpGazeSender != null)
             {
                 headPoseTracker = udpGazeSender.PoseTracker;
             }
+        }
+
+        private void TryResolveOptionalXrSuperResolutionController()
+        {
+            Type controllerType = Type.GetType(XrSuperResolutionControllerTypeName, false);
+            if (controllerType == null || !typeof(MonoBehaviour).IsAssignableFrom(controllerType))
+            {
+                return;
+            }
+
+            xrSuperResolutionController = FindObjectOfType(controllerType) as MonoBehaviour;
+            if (xrSuperResolutionController == null && Application.isPlaying && autoCreateXrSuperResolutionController)
+            {
+                xrSuperResolutionController = gameObject.AddComponent(controllerType) as MonoBehaviour;
+                if (xrSuperResolutionController != null)
+                {
+                    Debug.Log(
+                        "[ExperimentController] auto-created XrSuperResolutionController on "
+                        + gameObject.name
+                    );
+                }
+            }
+        }
+
+        private static string GetOptionalStringProperty(MonoBehaviour component, string propertyName)
+        {
+            if (component == null || string.IsNullOrEmpty(propertyName))
+            {
+                return string.Empty;
+            }
+
+            var property = component.GetType().GetProperty(propertyName);
+            if (property == null || property.PropertyType != typeof(string))
+            {
+                return string.Empty;
+            }
+
+            return property.GetValue(component) as string ?? string.Empty;
         }
 
         private void EnsureMode4Components()
@@ -1153,9 +1495,11 @@ namespace Pano2StereoVR
             {
                 string escapedDetail = (detail ?? string.Empty).Replace("\"", "\\\"");
                 string timestamp = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+                string escapedCondition = GetModeOverlayLabel(mode).Replace("\"", "\\\"");
                 string line = "{\"ts\":\"" + timestamp
                     + "\",\"event\":\"" + eventType
                     + "\",\"mode\":" + mode.ToString(CultureInfo.InvariantCulture)
+                    + ",\"condition\":\"" + escapedCondition + "\""
                     + ",\"requested\":" + _lastRequestedMode.ToString(CultureInfo.InvariantCulture)
                     + ",\"sent\":" + _lastSentMode.ToString(CultureInfo.InvariantCulture)
                     + ",\"applied\":" + _lastAppliedMode.ToString(CultureInfo.InvariantCulture)

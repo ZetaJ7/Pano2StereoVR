@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using UnityEngine;
@@ -11,6 +12,7 @@ namespace Pano2StereoVR
     public sealed class RtspBaselineReceiver : MonoBehaviour
     {
         [SerializeField] private string ffmpegExecutable = "ffmpeg";
+        [SerializeField] private string ffprobeExecutable = string.Empty;
         [SerializeField] private string rtspUrl = string.Empty;
         [SerializeField] [Min(16)] private int outputWidth = 1920;
         [SerializeField] [Min(16)] private int outputHeight = 1080;
@@ -25,15 +27,21 @@ namespace Pano2StereoVR
         [SerializeField] [Min(0)] private int analyzeDurationUs = 0;
         [SerializeField] [Min(0)] private int maxDelayUs = 0;
         [SerializeField] [Min(0)] private int reorderQueueSize = 0;
+        [SerializeField] private bool autoDetectInputFps = true;
+        [SerializeField] [Min(1f)] private float fallbackInputFps = 60f;
+        [SerializeField] [Min(100)] private int ffprobeTimeoutMs = 1500;
         [SerializeField] private bool verboseFfmpegLog = false;
         [SerializeField] private bool allowRuntimeOverrides = true;
         [SerializeField] private string rtspUrlArgName = "--rtsp-url";
         [SerializeField] private string ffmpegExecutableArgName = "--ffmpeg-exe";
+        [SerializeField] private string ffprobeExecutableArgName = "--ffprobe-exe";
         [SerializeField] private string rtspUrlEnvName = "P2SVR_RTSP_URL";
         [SerializeField] private string ffmpegExecutableEnvName = "P2SVR_FFMPEG_EXE";
+        [SerializeField] private string ffprobeExecutableEnvName = "P2SVR_FFPROBE_EXE";
 
         private readonly object _stateLock = new object();
         private readonly object _processLock = new object();
+        private const int PipePeekUnavailableBytes = -1;
         private Process _ffmpegProcess;
         private Thread _workerThread;
         private volatile bool _stopRequested;
@@ -41,6 +49,8 @@ namespace Pano2StereoVR
         private volatile bool _isConnected;
         private Texture2D _texture;
         private byte[] _latestFrame = Array.Empty<byte>();
+        private byte[] _applyFrame = Array.Empty<byte>();
+        private float _effectiveInputFps = 60f;
         private int _latestFrameId;
         private int _appliedFrameId;
         private long _decodedFrames;
@@ -59,6 +69,7 @@ namespace Pano2StereoVR
         public bool IsRunning => _isRunning;
         public bool IsConnected => _isConnected;
         public float DecodedFps => _decodedFps;
+        public float EffectiveInputFps => _effectiveInputFps;
         public long DecodedFrames => Interlocked.Read(ref _decodedFrames);
         public long DroppedFrames => Interlocked.Read(ref _droppedFrames);
         public long RestartCount => Interlocked.Read(ref _restartCount);
@@ -80,6 +91,25 @@ namespace Pano2StereoVR
         }
 
         public string DisplayUrl => SanitizeRtspUrl(rtspUrl);
+
+        public void SetStreamingActive(bool active)
+        {
+            if (active)
+            {
+                if (!enabled)
+                {
+                    enabled = true;
+                }
+                StartReceiver();
+                return;
+            }
+
+            StopReceiver();
+            if (enabled)
+            {
+                enabled = false;
+            }
+        }
 
         public bool ApplyOutputResolution(int width, int height, bool restartIfRunning)
         {
@@ -271,6 +301,9 @@ namespace Pano2StereoVR
                 return;
             }
             byte[] readBuffer = new byte[frameBytes];
+            byte[] candidateBuffer = new byte[frameBytes];
+            float effectiveInputFps = ResolveInputFps();
+            _effectiveInputFps = effectiveInputFps;
 
             while (!_stopRequested)
             {
@@ -287,7 +320,30 @@ namespace Pano2StereoVR
                     Stream stream = process.StandardOutput.BaseStream;
                     while (!_stopRequested)
                     {
+                        bool streamEnded = false;
                         if (!ReadExact(stream, readBuffer, frameBytes))
+                        {
+                            break;
+                        }
+
+                        int skippedFrames = 0;
+                        while (!_stopRequested && HasCompleteBufferedFrame(
+                                   TryGetPipeAvailableBytes(stream),
+                                   frameBytes
+                               ))
+                        {
+                            if (!ReadExact(stream, candidateBuffer, frameBytes))
+                            {
+                                streamEnded = true;
+                                break;
+                            }
+
+                            byte[] swap = readBuffer;
+                            readBuffer = candidateBuffer;
+                            candidateBuffer = swap;
+                            skippedFrames += 1;
+                        }
+                        if (streamEnded)
                         {
                             break;
                         }
@@ -303,6 +359,10 @@ namespace Pano2StereoVR
                         }
 
                         Interlocked.Increment(ref _decodedFrames);
+                        if (skippedFrames > 0)
+                        {
+                            Interlocked.Add(ref _droppedFrames, skippedFrames);
+                        }
                         _isConnected = true;
                     }
                 }
@@ -338,6 +398,7 @@ namespace Pano2StereoVR
             lock (_stateLock)
             {
                 _latestFrame = Array.Empty<byte>();
+                _applyFrame = Array.Empty<byte>();
                 _latestFrameId = 0;
                 _appliedFrameId = 0;
                 _decodedFps = 0f;
@@ -418,6 +479,145 @@ namespace Pano2StereoVR
             }
         }
 
+        private float ResolveInputFps()
+        {
+            float fallback = Mathf.Max(1f, fallbackInputFps);
+            if (!autoDetectInputFps)
+            {
+                return fallback;
+            }
+
+            string resolvedFfprobeExecutable = ResolveFfprobeExecutable();
+            if (string.IsNullOrWhiteSpace(resolvedFfprobeExecutable))
+            {
+                return fallback;
+            }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = resolvedFfprobeExecutable,
+                Arguments = BuildFfprobeArguments(),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            try
+            {
+                using (var process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        return fallback;
+                    }
+
+                    if (!process.WaitForExit(Mathf.Max(100, ffprobeTimeoutMs)))
+                    {
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch (Exception)
+                        {
+                        }
+                        return fallback;
+                    }
+
+                    string output = process.StandardOutput.ReadToEnd();
+                    if (process.ExitCode == 0 && TryParseFfprobeFrameRate(output, out float detectedFps))
+                    {
+                        return detectedFps;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (verboseFfmpegLog)
+                {
+                    UnityEngine.Debug.Log("[RtspBaselineReceiver] ffprobe fps detection failed: " + ex.Message);
+                }
+            }
+
+            return fallback;
+        }
+
+        private string BuildFfprobeArguments()
+        {
+            string transport = preferTcpTransport ? "tcp" : "udp";
+            var sb = new StringBuilder();
+            sb.Append("-v error ");
+            sb.Append("-select_streams v:0 ");
+            if (enableLowLatencyInputOptions)
+            {
+                if (probeSizeBytes > 0)
+                {
+                    sb.Append("-probesize ")
+                        .Append(probeSizeBytes.ToString(CultureInfo.InvariantCulture))
+                        .Append(' ');
+                }
+                sb.Append("-analyzeduration ")
+                    .Append(analyzeDurationUs.ToString(CultureInfo.InvariantCulture))
+                    .Append(' ');
+                sb.Append("-max_delay ")
+                    .Append(maxDelayUs.ToString(CultureInfo.InvariantCulture))
+                    .Append(' ');
+            }
+            sb.Append("-rtsp_transport ").Append(transport).Append(' ');
+            sb.Append("-show_entries stream=avg_frame_rate,r_frame_rate ");
+            sb.Append("-of default=noprint_wrappers=1:nokey=1 ");
+            sb.Append('"').Append(EscapeForQuotes(rtspUrl)).Append('"');
+            return sb.ToString();
+        }
+
+        private static bool TryParseFfprobeFrameRate(string output, out float frameRate)
+        {
+            frameRate = 0f;
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                return false;
+            }
+
+            string[] lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string rawLine in lines)
+            {
+                string line = rawLine.Trim();
+                if (string.IsNullOrWhiteSpace(line)
+                    || line.Equals("N/A", StringComparison.OrdinalIgnoreCase)
+                    || line == "0/0")
+                {
+                    continue;
+                }
+
+                float parsedRate;
+                int slashIndex = line.IndexOf('/');
+                if (slashIndex > 0)
+                {
+                    string numeratorText = line.Substring(0, slashIndex);
+                    string denominatorText = line.Substring(slashIndex + 1);
+                    if (!float.TryParse(numeratorText, NumberStyles.Float, CultureInfo.InvariantCulture, out float numerator)
+                        || !float.TryParse(denominatorText, NumberStyles.Float, CultureInfo.InvariantCulture, out float denominator)
+                        || denominator <= 0f)
+                    {
+                        continue;
+                    }
+                    parsedRate = numerator / denominator;
+                }
+                else if (!float.TryParse(line, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedRate))
+                {
+                    continue;
+                }
+
+                if (parsedRate >= 1f && parsedRate <= 1000f)
+                {
+                    frameRate = parsedRate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void StopFfmpegProcess()
         {
             lock (_processLock)
@@ -476,25 +676,47 @@ namespace Pano2StereoVR
 
         private void ApplyLatestFrame()
         {
-            bool hasFrame = false;
-            int dropped = 0;
+            if (!TryCopyLatestFrameForApply(out byte[] frameData, out _, out int dropped))
+            {
+                return;
+            }
+
+            if (_texture == null || _texture.width != outputWidth || _texture.height != outputHeight)
+            {
+                if (_texture != null)
+                {
+                    Destroy(_texture);
+                }
+                _texture = new Texture2D(outputWidth, outputHeight, TextureFormat.RGB24, false, false);
+                _texture.wrapMode = TextureWrapMode.Clamp;
+                _texture.filterMode = FilterMode.Bilinear;
+            }
+
+            _texture.LoadRawTextureData(frameData);
+            _texture.Apply(false, false);
+
+            if (dropped > 0)
+            {
+                Interlocked.Add(ref _droppedFrames, dropped);
+            }
+
+            if (FrameUpdated != null)
+            {
+                FrameUpdated.Invoke(_texture);
+            }
+        }
+
+        private bool TryCopyLatestFrameForApply(out byte[] frameData, out int frameId, out int dropped)
+        {
+            frameData = Array.Empty<byte>();
+            frameId = 0;
+            dropped = 0;
 
             lock (_stateLock)
             {
                 if (_latestFrameId == _appliedFrameId || _latestFrame.Length == 0)
                 {
-                    return;
-                }
-
-                if (_texture == null || _texture.width != outputWidth || _texture.height != outputHeight)
-                {
-                    if (_texture != null)
-                    {
-                        Destroy(_texture);
-                    }
-                    _texture = new Texture2D(outputWidth, outputHeight, TextureFormat.RGB24, false, false);
-                    _texture.wrapMode = TextureWrapMode.Clamp;
-                    _texture.filterMode = FilterMode.Bilinear;
+                    return false;
                 }
 
                 if (_latestFrameId > _appliedFrameId + 1)
@@ -502,27 +724,17 @@ namespace Pano2StereoVR
                     dropped = _latestFrameId - _appliedFrameId - 1;
                 }
 
-                _texture.LoadRawTextureData(_latestFrame);
-                _texture.Apply(false, false);
-
+                if (_applyFrame.Length != _latestFrame.Length)
+                {
+                    _applyFrame = new byte[_latestFrame.Length];
+                }
+                Buffer.BlockCopy(_latestFrame, 0, _applyFrame, 0, _latestFrame.Length);
+                frameData = _applyFrame;
+                frameId = _latestFrameId;
                 _appliedFrameId = _latestFrameId;
-                hasFrame = true;
             }
 
-            if (dropped > 0)
-            {
-                Interlocked.Add(ref _droppedFrames, dropped);
-            }
-
-            if (!hasFrame)
-            {
-                return;
-            }
-
-            if (FrameUpdated != null)
-            {
-                FrameUpdated.Invoke(_texture);
-            }
+            return true;
         }
 
         private void UpdateDecodedFps()
@@ -623,6 +835,44 @@ namespace Pano2StereoVR
             return true;
         }
 
+        private static bool HasCompleteBufferedFrame(int availableBytes, int frameBytes)
+        {
+            return frameBytes > 0 && availableBytes >= frameBytes;
+        }
+
+        private static int TryGetPipeAvailableBytes(Stream stream)
+        {
+            if (stream == null)
+            {
+                return PipePeekUnavailableBytes;
+            }
+
+            try
+            {
+                if (stream is FileStream fileStream)
+                {
+                    IntPtr handle = fileStream.SafeFileHandle.DangerousGetHandle();
+                    if (handle != IntPtr.Zero
+                        && PeekNamedPipe(
+                            handle,
+                            IntPtr.Zero,
+                            0,
+                            IntPtr.Zero,
+                            out uint availableBytes,
+                            IntPtr.Zero
+                        ))
+                    {
+                        return availableBytes > int.MaxValue ? int.MaxValue : (int)availableBytes;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return PipePeekUnavailableBytes;
+        }
+
         private void SleepReconnect()
         {
             if (reconnectDelayMs <= 0)
@@ -665,6 +915,18 @@ namespace Pano2StereoVR
                 ffmpegExecutable = runtimeFfmpegExe.Trim();
                 UnityEngine.Debug.Log(
                     "[RtspBaselineReceiver] ffmpeg executable override applied: " + ffmpegExecutable
+                );
+            }
+
+            string runtimeFfprobeExe = ResolveRuntimeOverride(
+                ffprobeExecutableEnvName,
+                ffprobeExecutableArgName
+            );
+            if (!string.IsNullOrWhiteSpace(runtimeFfprobeExe))
+            {
+                ffprobeExecutable = runtimeFfprobeExe.Trim();
+                UnityEngine.Debug.Log(
+                    "[RtspBaselineReceiver] ffprobe executable override applied: " + ffprobeExecutable
                 );
             }
         }
@@ -731,6 +993,40 @@ namespace Pano2StereoVR
             return string.IsNullOrWhiteSpace(fallback) ? "ffmpeg" : fallback;
         }
 
+        private string ResolveFfprobeExecutable()
+        {
+            string configured = (ffprobeExecutable ?? string.Empty).Trim().Trim('"');
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                if (Path.IsPathRooted(configured) || File.Exists(configured))
+                {
+                    return configured;
+                }
+
+                string nearby = TryFindNearbyFfprobeExecutable();
+                if (!string.IsNullOrWhiteSpace(nearby))
+                {
+                    return nearby;
+                }
+
+                return configured;
+            }
+
+            string ffmpegPath = ResolveFfmpegExecutable();
+            if (!string.IsNullOrWhiteSpace(ffmpegPath)
+                && !ffmpegPath.Equals("ffmpeg", StringComparison.OrdinalIgnoreCase))
+            {
+                string sibling = Path.Combine(Path.GetDirectoryName(ffmpegPath) ?? string.Empty, "ffprobe.exe");
+                if (File.Exists(sibling))
+                {
+                    return sibling;
+                }
+            }
+
+            string fallback = TryFindNearbyFfprobeExecutable();
+            return string.IsNullOrWhiteSpace(fallback) ? "ffprobe" : fallback;
+        }
+
         private static string TryFindNearbyFfmpegExecutable()
         {
             string dataPath = Application.dataPath;
@@ -739,6 +1035,27 @@ namespace Pano2StereoVR
                 Path.GetFullPath(Path.Combine(dataPath, "..", "..", "ffmpeg", "bin", "ffmpeg.exe")),
                 Path.GetFullPath(Path.Combine(dataPath, "..", "ffmpeg", "bin", "ffmpeg.exe")),
                 Path.GetFullPath(Path.Combine(dataPath, "..", "Tools", "ffmpeg", "bin", "ffmpeg.exe")),
+            };
+
+            foreach (string candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static string TryFindNearbyFfprobeExecutable()
+        {
+            string dataPath = Application.dataPath;
+            string[] candidates =
+            {
+                Path.GetFullPath(Path.Combine(dataPath, "..", "..", "ffmpeg", "bin", "ffprobe.exe")),
+                Path.GetFullPath(Path.Combine(dataPath, "..", "ffmpeg", "bin", "ffprobe.exe")),
+                Path.GetFullPath(Path.Combine(dataPath, "..", "Tools", "ffmpeg", "bin", "ffprobe.exe")),
             };
 
             foreach (string candidate in candidates)
@@ -789,6 +1106,16 @@ namespace Pano2StereoVR
             };
             return builder.Uri.ToString();
         }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool PeekNamedPipe(
+            IntPtr hNamedPipe,
+            IntPtr lpBuffer,
+            uint nBufferSize,
+            IntPtr lpBytesRead,
+            out uint lpTotalBytesAvail,
+            IntPtr lpBytesLeftThisMessage
+        );
     }
 }
 

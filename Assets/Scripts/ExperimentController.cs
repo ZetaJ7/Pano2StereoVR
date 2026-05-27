@@ -97,6 +97,7 @@ namespace Pano2StereoVR
         private string _rtspUrlInput = string.Empty;
         private bool _isRtspUrlFieldFocused;
         private bool _clearRtspUrlFieldFocus;
+        private bool _pendingRtspUrlApply;
 
         private const int ModeMin = 1;
         private const int ModeMax = 4;
@@ -190,6 +191,15 @@ namespace Pano2StereoVR
             {
                 WriteValidationEvent("session_end", CurrentMode, "controller disabled");
             }
+            if (rtspBaselineReceiver != null)
+            {
+                rtspBaselineReceiver.SetStreamingActive(false);
+            }
+            if (baselinePanoramaRenderer != null)
+            {
+                baselinePanoramaRenderer.enabled = false;
+            }
+            _isMode4Active = false;
             if (udpGazeSender != null)
             {
                 udpGazeSender.ModeMessageSent -= OnModeSent;
@@ -208,6 +218,11 @@ namespace Pano2StereoVR
         private void Update()
         {
             UpdateOverlayFps();
+            if (_pendingRtspUrlApply)
+            {
+                _pendingRtspUrlApply = false;
+                ApplyRtspUrlInput();
+            }
 
             if (_isRtspUrlFieldFocused)
             {
@@ -443,6 +458,8 @@ namespace Pano2StereoVR
                     "Unity/Decode: " + _unityFpsSmoothed.ToString("F1")
                     + " / "
                     + (rtspBaselineReceiver != null ? rtspBaselineReceiver.DecodedFps.ToString("F1") : "0.0")
+                    + " input="
+                    + (rtspBaselineReceiver != null ? rtspBaselineReceiver.EffectiveInputFps.ToString("F1") : "0.0")
                     + " fps",
                     compactLabelStyle
                 );
@@ -712,7 +729,7 @@ namespace Pano2StereoVR
 
             if (applyClicked || submitPressed)
             {
-                ApplyRtspUrlInput();
+                _pendingRtspUrlApply = true;
             }
         }
 
@@ -1262,7 +1279,7 @@ namespace Pano2StereoVR
             }
             if (rtspBaselineReceiver != null)
             {
-                rtspBaselineReceiver.enabled = active;
+                rtspBaselineReceiver.SetStreamingActive(active);
             }
             if (baselinePanoramaRenderer != null)
             {

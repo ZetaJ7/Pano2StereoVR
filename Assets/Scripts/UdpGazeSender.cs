@@ -14,8 +14,11 @@ namespace Pano2StereoVR
         [SerializeField] [Range(1, 120)] private int sendRateHz = 60;
         [SerializeField] private bool includeModeInGazePacket = false;
         [SerializeField] private bool includeIpdInGazePacket = true;
-        [SerializeField] [Range(1, 3)] private int initialMode = 3;
+        [SerializeField] [Range(ModeMin, ModeMax)] private int initialMode = 1;
         [SerializeField] [Range(0f, 0.13f)] private float initialIpdMeters = 0.065f;
+
+        private const int ModeMin = 1;
+        private const int ModeMax = 3;
 
         private UdpClient _udpClient;
         private float _nextSendTime;
@@ -36,7 +39,7 @@ namespace Pano2StereoVR
 
         private void Awake()
         {
-            CurrentMode = initialMode;
+            CurrentMode = Mathf.Clamp(initialMode, ModeMin, ModeMax);
             CurrentIpd = Mathf.Clamp(initialIpdMeters, 0f, 0.13f);
         }
 
@@ -82,7 +85,7 @@ namespace Pano2StereoVR
 
         public void SetMode(int mode)
         {
-            int clamped = Mathf.Clamp(mode, 1, 3);
+            int clamped = Mathf.Clamp(mode, ModeMin, ModeMax);
             CurrentMode = clamped;
             SendModeOnly(clamped);
         }

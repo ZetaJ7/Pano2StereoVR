@@ -6,10 +6,9 @@ namespace Pano2StereoVR.Tests
 {
     public sealed class ExperimentControllerModeLabelTests
     {
-        [TestCase(1, "Mono")]
+        [TestCase(1, "Baseline")]
         [TestCase(2, "Pose-agnostic")]
         [TestCase(3, "Pose-aware")]
-        [TestCase(4, "Baseline")]
         public void ModeOverlayLabelUsesPaperConditionNames(int mode, string expected)
         {
             Type controllerType = Type.GetType("Pano2StereoVR.ExperimentController, Assembly-CSharp");
@@ -40,7 +39,7 @@ namespace Pano2StereoVR.Tests
 
             object result = method.Invoke(null, Array.Empty<object>());
 
-            CollectionAssert.AreEqual(new[] { 4, 1, 2, 3 }, (int[])result);
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, (int[])result);
         }
 
         [Test]

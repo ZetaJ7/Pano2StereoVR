@@ -328,7 +328,7 @@ MonoBehaviour:
   sendRateHz: 60
   includeModeInGazePacket: 0
   includeIpdInGazePacket: 1
-  initialMode: 3
+  initialMode: 1
   initialIpdMeters: 0.065
 --- !u!4 &303507125
 Transform:

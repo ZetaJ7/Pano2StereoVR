@@ -5,7 +5,7 @@ Unity OpenXR viewer for VR subjective experiments driven by the `Pano2Stereo` Py
 ## Scope
 
 - Read SBS RGB frames from named shared memory.
-- Render per-eye ERP panorama in HMD.
+- Render the experiment output on a shared planar target for relative latency measurement.
 - Send `u0`, `mode`, and IPD control packets over UDP.
 - Keep protocol aligned with `docs/protocol.md` in the Python repo.
 
@@ -35,11 +35,11 @@ Pano2StereoVR/
 3. Install dependencies from `Packages/manifest.json`.
 4. Create a scene and attach:
    - `SharedMemoryReceiver`
-   - `StereoSphereRenderer`
+   - `StereoSphereRenderer` configured with the planar display surface
    - `HeadPoseTracker`
    - `UdpGazeSender`
    - `ExperimentController`
-5. Use shader `Pano2Stereo/StereoPanorama` on an inverted sphere material.
+5. Use shader `Pano2Stereo/StereoPanorama` on the planar display material.
 6. Start Python server with shared memory + UDP enabled:
    - `python src/pano2stereo.py --source Data/test1.mp4 --provider da2 --repair-method hachaj_fast_gpu --downsample 1080 --output-method shm --shm-name pano2stereo --gaze-udp-port 50051 --experiment-mode 3 --shm-fps-cap 0 --shm-fps-cap-fast 0 --experiment-logging`
 
@@ -55,4 +55,5 @@ Pano2StereoVR/
 - `Baseline` ffmpeg receive path enables low-latency RTSP input options by default (`direct` I/O, reduced probe/analyze delay, zero max-delay, zero reorder queue).
 - Runtime resolution presets: `1080` (`2184x1092`), `2K` (`2884x1442`), and `4K` (`5768x2884`). Use overlay buttons or `F5`/`F6` to cycle. In SHM modes, restart Python with matching `--downsample`; in `Baseline`, the RTSP receiver restarts with the selected output size.
 - Runtime target is selectable in the Unity editor. `VR OpenXR` starts OpenXR automatically. `Desktop Screen` disables automatic XR startup so Play mode can render to the Game window without SteamVR/HMD.
-- In desktop/no-HMD runs, `HeadPoseTracker` enables mouse look by default. Hold right mouse button and drag to change the screen-center pose vector; press `M` to toggle mouse look.
+- In desktop/no-HMD runs, `HeadPoseTracker` enables mouse look by default. Hold right mouse button and drag to turn the view; use `W/A/S/D` to move the camera around the planar target; press `M` to toggle mouse look.
+- The default `VRExperiment` scene renders all modes to the same flat target. This setup is intended for Local/LAN/WAN relative latency experiments and does not include the final dome projection stage.

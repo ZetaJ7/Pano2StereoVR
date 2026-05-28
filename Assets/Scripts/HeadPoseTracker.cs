@@ -31,6 +31,8 @@ namespace Pano2StereoVR
         [SerializeField] [Min(0.01f)] private float mousePitchSensitivity = 2.5f;
         [SerializeField] private bool invertMouseY = false;
         [SerializeField] [Range(10f, 89f)] private float mousePitchLimit = 85f;
+        [SerializeField] private bool enableDesktopWASDMovement = true;
+        [SerializeField] [Min(0.01f)] private float desktopMoveSpeed = 2.0f;
         [SerializeField] private bool enableDebugOverrideHotkeys = false;
         [SerializeField] private KeyCode centerVectorKey = KeyCode.F1;
         [SerializeField] private KeyCode leftVectorKey = KeyCode.F2;
@@ -94,6 +96,7 @@ namespace Pano2StereoVR
                 }
 
                 ApplyMouseLookToTransform();
+                ApplyDesktopMovementToTransform();
                 if (TryMapForward(headTransform.forward, out Vector3 mappedMouseForward))
                 {
                     ServerForwardUnit = mappedMouseForward;
@@ -274,6 +277,84 @@ namespace Pano2StereoVR
             _mousePitchDeg = Mathf.Clamp(_mousePitchDeg, -mousePitchLimit, mousePitchLimit);
 
             headTransform.localRotation = Quaternion.Euler(_mousePitchDeg, _mouseYawDeg, 0f);
+        }
+
+        private void ApplyDesktopMovementToTransform()
+        {
+            if (!enableDesktopWASDMovement || headTransform == null)
+            {
+                return;
+            }
+
+            float forwardInput = 0f;
+            if (Input.GetKey(KeyCode.W))
+            {
+                forwardInput += 1f;
+            }
+            if (Input.GetKey(KeyCode.S))
+            {
+                forwardInput -= 1f;
+            }
+
+            float rightInput = 0f;
+            if (Input.GetKey(KeyCode.D))
+            {
+                rightInput += 1f;
+            }
+            if (Input.GetKey(KeyCode.A))
+            {
+                rightInput -= 1f;
+            }
+
+            Vector3 delta = CalculateDesktopMoveDelta(
+                headTransform.rotation,
+                forwardInput,
+                rightInput,
+                desktopMoveSpeed * Time.unscaledDeltaTime
+            );
+            if (delta.sqrMagnitude <= 1e-8f)
+            {
+                return;
+            }
+
+            headTransform.position += delta;
+        }
+
+        private static Vector3 CalculateDesktopMoveDelta(
+            Quaternion orientation,
+            float forwardInput,
+            float rightInput,
+            float distance)
+        {
+            Vector3 forward = orientation * Vector3.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-8f)
+            {
+                forward = Vector3.forward;
+            }
+            else
+            {
+                forward.Normalize();
+            }
+
+            Vector3 right = orientation * Vector3.right;
+            right.y = 0f;
+            if (right.sqrMagnitude < 1e-8f)
+            {
+                right = Vector3.right;
+            }
+            else
+            {
+                right.Normalize();
+            }
+
+            Vector3 move = forward * forwardInput + right * rightInput;
+            if (move.sqrMagnitude > 1f)
+            {
+                move.Normalize();
+            }
+
+            return move * Mathf.Max(0f, distance);
         }
 
         private void SyncMouseAnglesFromTransform()

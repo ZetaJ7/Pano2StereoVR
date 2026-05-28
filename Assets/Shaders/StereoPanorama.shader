@@ -13,7 +13,7 @@ Shader "Pano2Stereo/StereoPanorama"
     SubShader
     {
         Tags { "RenderType"="Opaque" "Queue"="Geometry" }
-        Cull Front
+        Cull Off
         ZWrite On
         ZTest LEqual
 

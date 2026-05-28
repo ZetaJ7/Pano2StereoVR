@@ -3,8 +3,15 @@ using UnityEngine;
 namespace Pano2StereoVR
 {
     [RequireComponent(typeof(Renderer))]
+    [RequireComponent(typeof(MeshFilter))]
     public sealed class StereoSphereRenderer : MonoBehaviour
     {
+        private enum DisplaySurface
+        {
+            Planar = 0,
+            Sphere = 1,
+        }
+
         [SerializeField] private SharedMemoryReceiver receiver;
         [SerializeField] private Renderer targetRenderer;
         [SerializeField] private string textureProperty = "_MainTex";
@@ -14,7 +21,12 @@ namespace Pano2StereoVR
         [SerializeField] private string flipYProperty = "_FlipY";
         [SerializeField] private string swapEyesProperty = "_SwapEyes";
         [SerializeField] private bool updateOnEveryFrame = true;
-        [SerializeField] private bool followMainCamera = true;
+        [SerializeField] private DisplaySurface displaySurface = DisplaySurface.Planar;
+        [SerializeField] private bool autoConfigureRenderSurface = true;
+        [SerializeField] private Vector3 planarPosition = new Vector3(0f, 1.6f, 3.0f);
+        [SerializeField] private Vector3 planarEulerAngles = new Vector3(0f, 180f, 0f);
+        [SerializeField] private Vector2 planarSize = new Vector2(5.0f, 2.5f);
+        [SerializeField] private bool followMainCamera = false;
         [SerializeField] private Vector3 followOffset = Vector3.zero;
         [SerializeField] private bool autoSetSphereScale = true;
         [SerializeField] [Min(1f)] private float sphereScale = 100f;
@@ -37,8 +49,10 @@ namespace Pano2StereoVR
         private int _swapEyesPropertyId;
         private Texture _lastTexture;
         private bool _subscribedToReceiver;
+        private MeshFilter _meshFilter;
         private Transform _mainCameraTransform;
         private bool _rendererVisible;
+        private static Mesh _fallbackPlanarQuadMesh;
 
         public bool HasTargetRenderer => targetRenderer != null;
         public bool RendererEnabled => targetRenderer != null && targetRenderer.enabled;
@@ -68,6 +82,11 @@ namespace Pano2StereoVR
             {
                 targetRenderer = GetComponent<Renderer>();
             }
+            if (_meshFilter == null)
+            {
+                _meshFilter = GetComponent<MeshFilter>();
+            }
+            ConfigureRenderSurface();
             EnsureMaterialReady();
             EnsureReasonableScale();
             ResolveMainCamera();
@@ -92,6 +111,7 @@ namespace Pano2StereoVR
         private void Update()
         {
             HandleDebugHotkeys();
+            ConfigureRenderSurface();
             AlignToMainCamera();
             EnsureReasonableScale();
             TryAttachReceiver();
@@ -111,6 +131,72 @@ namespace Pano2StereoVR
                 return;
             }
             ApplyFrame(texture, mode);
+        }
+
+        private void ConfigureRenderSurface()
+        {
+            if (!autoConfigureRenderSurface || displaySurface != DisplaySurface.Planar)
+            {
+                return;
+            }
+
+            if (_meshFilter == null)
+            {
+                _meshFilter = GetComponent<MeshFilter>();
+            }
+            if (_meshFilter != null)
+            {
+                Mesh quad = GetPlanarQuadMesh();
+                if (quad != null && _meshFilter.sharedMesh != quad)
+                {
+                    _meshFilter.sharedMesh = quad;
+                }
+            }
+
+            transform.position = planarPosition;
+            transform.rotation = Quaternion.Euler(planarEulerAngles);
+            transform.localScale = new Vector3(
+                Mathf.Max(0.01f, planarSize.x),
+                Mathf.Max(0.01f, planarSize.y),
+                1f
+            );
+        }
+
+        private static Mesh GetPlanarQuadMesh()
+        {
+            Mesh builtInQuad = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            if (builtInQuad != null)
+            {
+                return builtInQuad;
+            }
+
+            if (_fallbackPlanarQuadMesh != null)
+            {
+                return _fallbackPlanarQuadMesh;
+            }
+
+            _fallbackPlanarQuadMesh = new Mesh
+            {
+                name = "Quad"
+            };
+            _fallbackPlanarQuadMesh.vertices = new[]
+            {
+                new Vector3(-0.5f, -0.5f, 0f),
+                new Vector3(0.5f, -0.5f, 0f),
+                new Vector3(-0.5f, 0.5f, 0f),
+                new Vector3(0.5f, 0.5f, 0f)
+            };
+            _fallbackPlanarQuadMesh.uv = new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(1f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f)
+            };
+            _fallbackPlanarQuadMesh.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+            _fallbackPlanarQuadMesh.RecalculateNormals();
+            _fallbackPlanarQuadMesh.RecalculateBounds();
+            return _fallbackPlanarQuadMesh;
         }
 
         private void TryAttachReceiver()
@@ -149,6 +235,10 @@ namespace Pano2StereoVR
 
             Vector3 targetPosition = _mainCameraTransform.position + followOffset;
             CameraDistance = Vector3.Distance(transform.position, targetPosition);
+            if (displaySurface == DisplaySurface.Planar && !followMainCamera)
+            {
+                return;
+            }
             if (followMainCamera || (autoRecentreIfCameraOutside && CameraDistance > recenterDistance))
             {
                 transform.position = targetPosition;
@@ -158,6 +248,11 @@ namespace Pano2StereoVR
 
         private void EnsureReasonableScale()
         {
+            if (displaySurface == DisplaySurface.Planar)
+            {
+                return;
+            }
+
             float targetScale = Mathf.Max(1f, sphereScale);
             bool tooSmallScale = transform.localScale.x < 10f
                 && transform.localScale.y < 10f
@@ -189,8 +284,35 @@ namespace Pano2StereoVR
                 return false;
             }
 
-            targetRenderer.material = new Material(shader);
+            SetTargetMaterial(new Material(shader));
             return true;
+        }
+
+        private Material GetTargetMaterialForWrite()
+        {
+            if (targetRenderer == null)
+            {
+                return null;
+            }
+
+            return Application.isPlaying ? targetRenderer.material : targetRenderer.sharedMaterial;
+        }
+
+        private void SetTargetMaterial(Material material)
+        {
+            if (targetRenderer == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                targetRenderer.material = material;
+            }
+            else
+            {
+                targetRenderer.sharedMaterial = material;
+            }
         }
 
         private void UpdateVisibilityDiagnostics()
@@ -233,7 +355,11 @@ namespace Pano2StereoVR
             {
                 _lastTexture = null;
             }
-            Material material = targetRenderer.material;
+            Material material = GetTargetMaterialForWrite();
+            if (material == null)
+            {
+                return;
+            }
             if (_lastTexture != texture || material.GetTexture(_texturePropertyId) != texture)
             {
                 material.SetTexture(_texturePropertyId, texture);

@@ -273,6 +273,18 @@ MonoBehaviour:
   useMainCameraWhenUnset: 1
   preferXrNodePose: 1
   logPoseSourceChanges: 1
+  enableMouseLook: 1
+  autoEnableMouseLookWithoutXr: 1
+  toggleMouseLookKey: 109
+  requireRightMouseButton: 1
+  lockCursorWhileMouseLooking: 1
+  hideCursorWhileMouseLooking: 1
+  mouseYawSensitivity: 3
+  mousePitchSensitivity: 2.5
+  invertMouseY: 0
+  mousePitchLimit: 85
+  enableDesktopWASDMovement: 1
+  desktopMoveSpeed: 2
   enableDebugOverrideHotkeys: 1
   centerVectorKey: 282
   leftVectorKey: 283
@@ -477,7 +489,7 @@ Transform:
   m_GameObject: {fileID: 961739749}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalPosition: {x: 0, y: 1.6, z: -2}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -542,7 +554,12 @@ MonoBehaviour:
   flipYProperty: _FlipY
   swapEyesProperty: _SwapEyes
   updateOnEveryFrame: 1
-  followMainCamera: 1
+  displaySurface: 0
+  autoConfigureRenderSurface: 1
+  planarPosition: {x: 0, y: 1.6, z: 3}
+  planarEulerAngles: {x: 0, y: 180, z: 0}
+  planarSize: {x: 5, y: 2.5}
+  followMainCamera: 0
   followOffset: {x: 0, y: 0, z: 0}
   autoSetSphereScale: 1
   sphereScale: 100
@@ -626,7 +643,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1010682799}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!4 &1010682804
 Transform:
   m_ObjectHideFlags: 0
@@ -635,13 +652,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1010682799}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
-  m_LocalScale: {x: 100, y: 100, z: 100}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
+  m_LocalPosition: {x: 0, y: 1.6, z: 3}
+  m_LocalScale: {x: 5, y: 2.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!1 &1285427524
 GameObject:
   m_ObjectHideFlags: 0

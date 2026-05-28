@@ -69,7 +69,7 @@ namespace Pano2StereoVR
         [SerializeField] private float ipdMax = 0.130f;
         [SerializeField] private bool showOverlay = true;
         [SerializeField] private bool showShmPreview = true;
-        [SerializeField] [Range(0.1f, 0.5f)] private float shmPreviewWidthRatio = 0.40f;
+        [SerializeField] [Range(0.05f, 0.5f)] private float shmPreviewWidthRatio = 0.20f;
         [SerializeField] [Min(0.1f)] private float applyTimeoutSeconds = 1.0f;
         [SerializeField] [Range(0.25f, 2.0f)] private float fpsSampleWindowSeconds = 1.0f;
         [SerializeField] private bool writeValidationLog = true;
@@ -279,208 +279,122 @@ namespace Pano2StereoVR
                 return;
             }
 
-            string requestState = _hasPendingRequest
-                ? (_requestTimedOut ? "Timeout" : "Pending")
-                : "Applied";
             GUIStyle compactLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 margin = new RectOffset(0, 0, 0, 1),
                 padding = new RectOffset(0, 0, 0, 0),
-                fontSize = 14
+                fontSize = 13
             };
             GUIStyle titleStyle = new GUIStyle(compactLabelStyle)
             {
                 fontStyle = FontStyle.Bold,
                 margin = new RectOffset(0, 0, 0, 2),
-                fontSize = 15
+                fontSize = 14
             };
             GUIStyle modeTitleStyle = new GUIStyle(titleStyle);
             modeTitleStyle.normal.textColor = new Color(0.45f, 1.0f, 0.45f);
-            GUIStyle wrapLabelStyle = new GUIStyle(compactLabelStyle)
-            {
-                wordWrap = true
-            };
             GUIStyle compactButtonStyle = new GUIStyle(GUI.skin.button)
             {
                 margin = new RectOffset(0, 0, 0, 0),
                 padding = new RectOffset(8, 8, 2, 2),
                 fontSize = 13
             };
-            GUIStyle warningLabelStyle = new GUIStyle(wrapLabelStyle)
+            GUIStyle performanceLabelStyle = new GUIStyle(compactLabelStyle)
             {
-                fontStyle = FontStyle.Bold
+                fontSize = 11,
+                alignment = TextAnchor.MiddleLeft
             };
-            warningLabelStyle.normal.textColor = new Color(1.0f, 0.78f, 0.35f);
 
-            string receiverPromptMessage = GetReceiverPromptMessage();
-            bool hasReceiverPrompt = !string.IsNullOrEmpty(receiverPromptMessage);
-            float boxHeight = CalculateCompactOverlayHeight();
-            float columnGap = 8f;
-            float column1Width = headPoseTracker != null && headPoseTracker.IsDebugOverrideActive ? 380f : 344f;
-            float column2Width = 228f;
-            float column3Width = hasReceiverPrompt ? 470f : 340f;
-            float desiredInnerWidth = column1Width + column2Width + column3Width + columnGap * 2f;
-            float maxInnerWidth = Screen.width - 32f;
-            float widthScale = desiredInnerWidth > maxInnerWidth ? maxInnerWidth / desiredInnerWidth : 1f;
-            column1Width *= widthScale;
-            column2Width *= widthScale;
-            column3Width *= widthScale;
-            float innerWidth = desiredInnerWidth * widthScale;
-            float boxWidth = innerWidth + 20f;
-            int displayedMode = ResolveDisplayedMode();
-            string displayedModeLabel = GetModeOverlayLabel(displayedMode);
+            int currentMode = ResolveCurrentOverlayMode();
+            int selectedMode = ResolveDisplayedMode();
 
+            DrawTopModeOverlay(currentMode, selectedMode, modeTitleStyle, compactButtonStyle, compactLabelStyle);
+            Rect previewRect = CalculateCurrentShmPreviewRect();
+            DrawShmPreview(previewRect);
+            DrawBottomPerformanceOverlay(performanceLabelStyle, previewRect);
+        }
 
+        private void DrawTopModeOverlay(
+            int currentMode,
+            int selectedMode,
+            GUIStyle modeTitleStyle,
+            GUIStyle compactButtonStyle,
+            GUIStyle compactLabelStyle)
+        {
+            float boxHeight = 44f;
+            float boxWidth = Mathf.Min(Screen.width - 24f, 760f);
+            Rect boxRect = new Rect(12f, 12f, boxWidth, boxHeight);
 
-            GUI.color = Color.black;
-            GUI.Box(new Rect(12f, 12f, boxWidth, boxHeight), GUIContent.none);
-            GUI.color = Color.white;
+            Color previousColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.72f);
+            GUI.Box(boxRect, GUIContent.none);
+            GUI.color = previousColor;
 
-            GUILayout.BeginArea(new Rect(22f, 19f, innerWidth, boxHeight - 10f));
+            GUILayout.BeginArea(new Rect(boxRect.x + 10f, boxRect.y + 9f, boxRect.width - 20f, boxRect.height - 12f));
             GUILayout.BeginHorizontal();
-
-            GUILayout.BeginVertical(GUILayout.Width(column1Width));
-            GUILayout.Label(displayedModeLabel, modeTitleStyle);
-            DrawModeButtonGroup(displayedMode, compactButtonStyle, compactLabelStyle);
             GUILayout.Label(
-                "Switch: req/sent/app "
-                + _lastRequestedMode + "/" + _lastSentMode + "/" + _lastAppliedMode
-                + " (" + requestState + ")",
-                compactLabelStyle
+                "Mode: " + GetModeOverlayLabel(currentMode),
+                modeTitleStyle,
+                GUILayout.Width(170f)
             );
-            if (_lastAppliedLatencyMs >= 0f)
-            {
-                GUILayout.Label("Mode Switch Latency: " + _lastAppliedLatencyMs.ToString("F1") + " ms", compactLabelStyle);
-            }
-            GUILayout.BeginHorizontal();
+            GUILayout.Label("Select:", compactLabelStyle, GUILayout.Width(48f));
+            DrawModeButtonGroup(selectedMode, compactButtonStyle);
+            GUILayout.FlexibleSpace();
             GUILayout.Label(
                 "IPD: " + (_currentIpd * 1000f).ToString("F1", CultureInfo.InvariantCulture) + "mm",
                 compactLabelStyle,
-                GUILayout.ExpandWidth(false)
+                GUILayout.Width(96f)
             );
-            GUILayout.Space(4f);
-            if (GUILayout.Button(
-                    "Reset IPD",
-                    compactButtonStyle,
-                    GUILayout.Width(88f),
-                    GUILayout.Height(20f),
-                    GUILayout.ExpandWidth(false)))
-            {
-                ResetIpdToDefault();
-            }
-            GUILayout.EndHorizontal();
-            if (headPoseTracker != null)
-            {
-                GUILayout.Label("View: " + headPoseTracker.CurrentPoseSourceLabel, compactLabelStyle);
-                if (headPoseTracker.IsMouseLookEnabled)
-                {
-                    GUILayout.Label("Mouse: M toggle, RMB drag", compactLabelStyle);
-                }
-                if (headPoseTracker.IsDebugOverrideActive)
-                {
-                    GUILayout.Label(
-                        "Debug u0: " + FormatVector(headPoseTracker.DebugOverrideVector),
-                        wrapLabelStyle
-                    );
-                }
-            }
-            GUILayout.EndVertical();
-
-            GUILayout.Space(columnGap);
-
-            GUILayout.BeginVertical(GUILayout.Width(column2Width));
-            GUILayout.Label("Performance", titleStyle);
-            GUILayout.Label(
-                "Unity/SHM: " + _unityFpsSmoothed.ToString("F1")
-                + " / " + _shmReceiveFps.ToString("F1") + " fps",
-                compactLabelStyle
-            );
-            GUILayout.Label(
-                "Writer FPS: "
-                + (sharedMemoryReceiver != null ? sharedMemoryReceiver.ObservedWriterFps.ToString("F1") : "0.0"),
-                compactLabelStyle
-            );
-
-            if (stereoSphereRenderer != null && stereoSphereRenderer.HasBoundTexture)
-            {
-                GUILayout.Label(
-                    "Texture: " + stereoSphereRenderer.BoundTextureWidth + "x"
-                    + stereoSphereRenderer.BoundTextureHeight,
-                    compactLabelStyle
-                );
-            }
-            else
-            {
-                GUILayout.Label("Texture: unbound", compactLabelStyle);
-            }
-
-            if (xrSuperResolutionController != null)
-            {
-                string statusMessage = GetOptionalStringProperty(
-                    xrSuperResolutionController,
-                    "StatusMessage"
-                );
-                if (!string.IsNullOrEmpty(statusMessage))
-                {
-                    GUILayout.Label(statusMessage, wrapLabelStyle);
-                }
-                string hotkeyHint = GetOptionalStringProperty(
-                    xrSuperResolutionController,
-                    "HotkeyHint"
-                );
-                if (!string.IsNullOrEmpty(hotkeyHint))
-                {
-                    GUILayout.Label(hotkeyHint, compactLabelStyle);
-                }
-            }
-
-            if (sharedMemoryReceiver != null)
-            {
-                GUILayout.Label(
-                    "Frames: accepted=" + sharedMemoryReceiver.AcceptedFrames
-                    + " mode_changes=" + sharedMemoryReceiver.ModeChangesApplied,
-                    compactLabelStyle
-                );
-            }
-            GUILayout.EndVertical();
-
-            GUILayout.Space(columnGap);
-
-            GUILayout.BeginVertical(GUILayout.Width(column3Width));
-            GUILayout.Label("Receiver", titleStyle);
-            DrawResolutionControls(compactLabelStyle, compactButtonStyle, warningLabelStyle);
-            if (sharedMemoryReceiver != null)
-            {
-                GUILayout.Label(
-                    "SHM: opened=" + FormatYesNo(sharedMemoryReceiver.IsOpened)
-                    + " mode=" + sharedMemoryReceiver.CurrentMode
-                    + " seq=" + sharedMemoryReceiver.LastObservedSeq,
-                    compactLabelStyle
-                );
-                GUILayout.Label(
-                    "SHM: busy=" + sharedMemoryReceiver.WriterBusySkips
-                    + " torn=" + sharedMemoryReceiver.TornRejected,
-                    compactLabelStyle
-                );
-            }
-            if (stereoSphereRenderer != null)
-            {
-                GUILayout.Label(
-                    "Render: visible=" + FormatYesNo(stereoSphereRenderer.RendererVisible)
-                    + " tex=" + FormatYesNo(stereoSphereRenderer.HasBoundTexture),
-                    compactLabelStyle
-                );
-            }
-            if (!string.IsNullOrEmpty(receiverPromptMessage))
-            {
-                GUILayout.Label(receiverPromptMessage, warningLabelStyle);
-            }
-            GUILayout.EndVertical();
-
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+        }
 
-            DrawShmPreview();
+        private void DrawBottomPerformanceOverlay(GUIStyle performanceLabelStyle, Rect previewRect)
+        {
+            Rect rect = CalculatePerformanceOverlayRect(Screen.width, Screen.height, previewRect);
+            if (rect.width <= 0f)
+            {
+                return;
+            }
+
+            Color previousColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.62f);
+            GUI.Box(rect, GUIContent.none);
+            GUI.color = previousColor;
+            GUI.Label(
+                new Rect(rect.x + 8f, rect.y + 1f, rect.width - 16f, rect.height - 2f),
+                GetPerformanceOverlayText(),
+                performanceLabelStyle
+            );
+        }
+
+        private string GetPerformanceOverlayText()
+        {
+            string writerFps = sharedMemoryReceiver != null
+                ? sharedMemoryReceiver.ObservedWriterFps.ToString("F1", CultureInfo.InvariantCulture)
+                : "0.0";
+            string textureText = stereoSphereRenderer != null && stereoSphereRenderer.HasBoundTexture
+                ? stereoSphereRenderer.BoundTextureWidth.ToString(CultureInfo.InvariantCulture)
+                    + "x" + stereoSphereRenderer.BoundTextureHeight.ToString(CultureInfo.InvariantCulture)
+                : "unbound";
+
+            return "Performance: Unity " + _unityFpsSmoothed.ToString("F1", CultureInfo.InvariantCulture)
+                + " fps | SHM " + _shmReceiveFps.ToString("F1", CultureInfo.InvariantCulture)
+                + " fps | Writer " + writerFps + " fps | Texture " + textureText;
+        }
+
+        private static Rect CalculatePerformanceOverlayRect(
+            float screenWidth,
+            float screenHeight,
+            Rect previewRect)
+        {
+            float left = 12f;
+            float gap = 12f;
+            float right = previewRect.width > 0f
+                ? previewRect.x - gap
+                : screenWidth - 12f;
+            float width = Mathf.Min(760f, right - left);
+            return new Rect(left, screenHeight - 28f, Mathf.Max(0f, width), 20f);
         }
 
         private void DrawResolutionControls(
@@ -685,6 +599,16 @@ namespace Pano2StereoVR
             return Mathf.Clamp(CurrentMode, ModeMin, ModeMax);
         }
 
+        private int ResolveCurrentOverlayMode()
+        {
+            if (_lastAppliedMode >= ModeMin && _lastAppliedMode <= ModeMax)
+            {
+                return _lastAppliedMode;
+            }
+
+            return Mathf.Clamp(CurrentMode, ModeMin, ModeMax);
+        }
+
         private static string GetModeOverlayLabel(int mode)
         {
             switch (mode)
@@ -707,8 +631,7 @@ namespace Pano2StereoVR
 
         private void DrawModeButtonGroup(
             int displayedMode,
-            GUIStyle compactButtonStyle,
-            GUIStyle compactLabelStyle)
+            GUIStyle compactButtonStyle)
         {
             GUILayout.BeginHorizontal();
             for (int index = 0; index < ModeButtonOrder.Length; index++)
@@ -717,7 +640,6 @@ namespace Pano2StereoVR
                 DrawModeButton(mode, displayedMode, compactButtonStyle);
             }
             GUILayout.EndHorizontal();
-            GUILayout.Label("Keys: 1/2/3", compactLabelStyle);
         }
 
         private void DrawModeButton(
@@ -1057,32 +979,64 @@ namespace Pano2StereoVR
             return property.GetValue(component) as string ?? string.Empty;
         }
 
-        private void DrawShmPreview()
+        private Rect CalculateCurrentShmPreviewRect()
         {
             if (!showShmPreview || sharedMemoryReceiver == null || sharedMemoryReceiver.StereoTexture == null)
+            {
+                return Rect.zero;
+            }
+
+            Texture texture = sharedMemoryReceiver.StereoTexture;
+            return CalculateShmPreviewRect(
+                Screen.width,
+                Screen.height,
+                texture.width,
+                texture.height,
+                shmPreviewWidthRatio
+            );
+        }
+
+        private void DrawShmPreview(Rect previewRect)
+        {
+            if (previewRect.width <= 0f || previewRect.height <= 0f || sharedMemoryReceiver == null)
             {
                 return;
             }
 
             Texture texture = sharedMemoryReceiver.StereoTexture;
-            float width = Mathf.Clamp(Screen.width * shmPreviewWidthRatio, 240f, Screen.width * 0.45f);
-            float aspect = texture.width / Mathf.Max(1f, texture.height);
+            if (texture == null)
+            {
+                return;
+            }
+
+            Color previousColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.62f);
+            GUI.Box(new Rect(previewRect.x - 5f, previewRect.y - 21f, previewRect.width + 10f, previewRect.height + 26f), GUIContent.none);
+            GUI.color = previousColor;
+            GUI.Label(new Rect(previewRect.x + 3f, previewRect.y - 19f, 120f, 18f), "SHM Preview");
+            GUI.DrawTextureWithTexCoords(previewRect, texture, new Rect(0f, 1f, 1f, -1f), false);
+        }
+
+        private static Rect CalculateShmPreviewRect(
+            float screenWidth,
+            float screenHeight,
+            float textureWidth,
+            float textureHeight,
+            float widthRatio)
+        {
+            float width = Mathf.Clamp(screenWidth * Mathf.Max(0.01f, widthRatio), 120f, screenWidth * 0.45f);
+            float aspect = textureWidth / Mathf.Max(1f, textureHeight);
             float height = width / Mathf.Max(0.1f, aspect);
-            float maxHeight = Screen.height * 0.32f;
+            float maxHeight = screenHeight * 0.32f;
             if (height > maxHeight)
             {
                 height = maxHeight;
                 width = height * aspect;
             }
 
-            float x = Screen.width - width - 20f;
-            float y = Screen.height - height - 20f;
-
-            GUI.color = Color.black;
-            GUI.Box(new Rect(x - 6f, y - 26f, width + 12f, height + 32f), GUIContent.none);
-            GUI.color = Color.white;
-            GUI.Label(new Rect(x + 4f, y - 22f, 240f, 20f), "SHM Preview");
-            GUI.DrawTextureWithTexCoords(new Rect(x, y, width, height), texture, new Rect(0f, 1f, 1f, -1f), false);
+            float x = screenWidth - width - 20f;
+            float y = screenHeight - height - 20f;
+            return new Rect(Mathf.Max(0f, x), Mathf.Max(0f, y), width, height);
         }
 
         private void UpdateOverlayFps()

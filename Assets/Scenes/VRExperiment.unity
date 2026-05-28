@@ -729,7 +729,7 @@ MonoBehaviour:
   mode3Key: 51
   showOverlay: 1
   showShmPreview: 1
-  shmPreviewWidthRatio: 0.4
+  shmPreviewWidthRatio: 0.2
   applyTimeoutSeconds: 5
   fpsSampleWindowSeconds: 1
   writeValidationLog: 1

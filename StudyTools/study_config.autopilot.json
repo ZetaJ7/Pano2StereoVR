@@ -1,0 +1,166 @@
+{
+  "study_id": "Pano2Stereo-E5",
+  "config_version": "autopilot-desktop-check-2026-11-19c",
+  "note": "Reduced plan for the desktop autopilot check only (same flow; short break; 3 s placeholder clips; few trials). Not a study configuration.",
+  "stimuli_dir": "Stimuli",
+  "file_pattern": "{clip_id}__{condition}.mp4",
+  "flow": [
+    "checkin",
+    "ssq:S_pre",
+    "hmd_fit",
+    "stereotest",
+    "part:1",
+    "ssq:S_mid1",
+    "break",
+    "ssq:S_mid2",
+    "hmd_fit",
+    "gazetraining",
+    "part:2",
+    "ssq:S_post",
+    "post_questionnaire",
+    "end"
+  ],
+  "min_break_s": 5,
+  "alignment": {
+    "tolerance_deg": 5.0,
+    "dwell_s": 1.0,
+    "note": "第二部分每个试次与注视练习开始前：头部在参考方向 tolerance_deg 内连续保持 dwell_s 秒后自动开始。tolerance_deg 5° 为用户 11-19 暂定，实测后再调整；dwell_s 1.0 s 为用户 11-19 决定"
+  },
+  "timing": {
+    "clip_s": 3.0,
+    "gap_between_ab_s": 1.0,
+    "gray_between_trials_s": 1.0,
+    "orientation_cue_s": 2.0,
+    "note": "orientation_cue_s 自 plan 格式 4 起不再使用（第二部分改为朝向对准后自动开始，见 alignment）"
+  },
+  "stereotest": {
+    "enabled": true,
+    "shapes": [
+      "circle",
+      "square",
+      "triangle",
+      "cross"
+    ],
+    "practice_disparity_px": 8,
+    "disparities_px": [
+      2
+    ],
+    "repeats_per_level": 1,
+    "dot_px": 3,
+    "quad_distance_m": 2.0,
+    "quad_size_deg": 20.0,
+    "display_fallback": {
+      "eye_width_px": 2160,
+      "hfov_deg": 105.0
+    },
+    "note": "视差以显示像素计；运行时由 XR 眼图纹理宽度与投影视场换算角秒（无 XR 时用 display_fallback），每次写入 stereotest.csv。待用户确认"
+  },
+  "gaze_training": {
+    "enabled": true,
+    "n_dots": 8,
+    "radius_deg": 15.0,
+    "dwell_s": 1.0,
+    "dot_size_deg": 1.2,
+    "max_head_deviation_deg": 5.0,
+    "max_attempts": 3,
+    "reference_yaw_deg": 0.0,
+    "reference_pitch_deg": 0.0,
+    "note": "黄十字位于参考方向，8 个不同颜色的点在半径 15° 的圆上依次亮起；阈值与次数待用户确认"
+  },
+  "part1": {
+    "conditions": [
+      "mono",
+      "ours",
+      "deepsynthesis",
+      "motionparallax"
+    ],
+    "repetitions": 1,
+    "clips": [
+      {
+        "clip_id": "vin_A",
+        "cell": "virtual_indoor",
+        "scene": "indoor",
+        "source": "replica"
+      },
+      {
+        "clip_id": "rout_A",
+        "cell": "real_outdoor",
+        "scene": "outdoor",
+        "source": "pair360"
+      }
+    ],
+    "training": [
+      {
+        "clip_id": "train_indoor",
+        "condition": "ours"
+      }
+    ],
+    "dummy": [
+      {
+        "clip_id": "dummy_indoor",
+        "condition": "mono"
+      }
+    ],
+    "viewing": {
+      "self_paced": false,
+      "min_view_s": null,
+      "max_view_s": 0,
+      "allow_review_on_rerate": true,
+      "note": "组末汇总每段可回放（allow_review_on_rerate，用户 11-19 决定开启）；self_paced 默认 false，待用户确认"
+    },
+    "note": "11-19 用户决定第一部分四种方法；deepsynthesis、motionparallax 的刺激尚未生成（QA 模式用占位片段）。dummy 改为 1 个片段 × 4 条件的一组，待用户确认"
+  },
+  "part2": {
+    "conditions": [
+      "pa",
+      "paw"
+    ],
+    "same_pairs_per_clip": 1,
+    "clips": [
+      {
+        "clip_id": "near_A",
+        "cell": "virtual_indoor",
+        "scene": "indoor",
+        "source": "replica",
+        "reference_yaw_deg": 0.0,
+        "reference_pitch_deg": 0.0
+      },
+      {
+        "clip_id": "near_B",
+        "cell": "virtual_indoor",
+        "scene": "indoor",
+        "source": "replica",
+        "reference_yaw_deg": 0.0,
+        "reference_pitch_deg": 0.0
+      }
+    ],
+    "training": [
+      {
+        "clip_id": "train_near",
+        "cond_a": "pa",
+        "cond_b": "paw",
+        "reference_yaw_deg": 0.0,
+        "reference_pitch_deg": 0.0
+      }
+    ],
+    "viewing": {
+      "self_paced": true,
+      "min_view_s": null,
+      "max_view_s": 0,
+      "note": "片段播完一遍后循环，被试按扳机或空格进入下一段；min_view_s null = 一遍，max_view_s 0 = 不限；待用户确认"
+    }
+  },
+  "pending_user_decision": {
+    "note": "以下默认值待用户确认（11-19 走查后加入；程序只读取数值，不含任何通过或剔除规则）",
+    "stereotest.display_fallback": "无 XR 眼图纹理时的换算用值（每眼宽 2160 px、水平视场 105°），待按 Pico 4 Ultra 官方规格核实",
+    "stereotest.practice_disparity_px / disparities_px / dot_px": "练习 8 px，正式 4、2、1 px，各 2 次，点大小 3 px；待上机确认串流下可辨",
+    "gaze_training.max_head_deviation_deg": "注视练习头部偏离阈值 5°，超过即提示重做",
+    "gaze_training.max_attempts": "注视练习最多 3 次，最后一次仍超过阈值时继续实验并在数据中标记",
+    "part2.viewing.min_view_s / max_view_s": "最短观看时长 null = 完整播放一遍；最长 0 = 不设上限",
+    "part1.viewing.self_paced": "第一部分是否同样自定节奏，默认 false",
+    "stereo pass criterion": "立体视通过标准不在程序中；分析程序 analysis_config.stereo_pass_rule 默认未设定，只报告",
+    "part1.dummy": "dummy 由 2 个片段 × 2 条件改为 1 个片段 × 4 条件（一组，排在正式组之前）",
+    "alignment.tolerance_deg": "用户 11-19 暂定 5°，实测后再调整（不是待确认项，列在这里便于复查）",
+    "break": "休息至少 min_break_s（120 s）后由被试自选开始"
+  }
+}

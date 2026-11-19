@@ -25,3 +25,11 @@ Recordings/
 
 # Generated assets
 Assets/AssetStoreTools*
+
+# Subjective study: local stimuli and participant data (never commit)
+/Stimuli/
+/StudyData/
+/StudyData_backup/
+
+# local per-machine study settings (qa mode for desktop checks)
+study_settings.json

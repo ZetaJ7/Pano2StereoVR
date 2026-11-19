@@ -1,0 +1,360 @@
+{
+  "plan_format_version": 4,
+  "study_id": "Pano2Stereo-E5",
+  "config_version": "autopilot-desktop-check-2026-11-19c",
+  "config_sha256": "a3dd32707ec62eb3a37bf8b8788f4720c1b49d854471cec43c44db3e7ee08b84",
+  "participant_id": "AP01",
+  "seed": 103066360963394,
+  "generated_utc": "2026-11-19T07:48:14+00:00",
+  "timing": {
+    "clip_s": 3.0,
+    "gap_between_ab_s": 1.0,
+    "gray_between_trials_s": 1.0,
+    "orientation_cue_s": 2.0,
+    "note": "orientation_cue_s 自 plan 格式 4 起不再使用（第二部分改为朝向对准后自动开始，见 alignment）"
+  },
+  "flow": [
+    "checkin",
+    "ssq:S_pre",
+    "hmd_fit",
+    "stereotest",
+    "part:1",
+    "ssq:S_mid1",
+    "break",
+    "ssq:S_mid2",
+    "hmd_fit",
+    "gazetraining",
+    "part:2",
+    "ssq:S_post",
+    "post_questionnaire",
+    "end"
+  ],
+  "min_break_s": 5.0,
+  "stereotest": {
+    "enabled": true,
+    "shapes": [
+      "circle",
+      "square",
+      "triangle",
+      "cross"
+    ],
+    "quad_distance_m": 2.0,
+    "quad_size_deg": 20.0,
+    "dot_px": 3,
+    "display_fallback": {
+      "eye_width_px": 2160,
+      "hfov_deg": 105.0
+    },
+    "trials": [
+      {
+        "index": 0,
+        "block": "practice",
+        "shape": "circle",
+        "disparity_px": 8,
+        "sign": "crossed"
+      },
+      {
+        "index": 1,
+        "block": "main",
+        "shape": "cross",
+        "disparity_px": 2,
+        "sign": "crossed"
+      }
+    ]
+  },
+  "alignment": {
+    "tolerance_deg": 5.0,
+    "dwell_s": 1.0
+  },
+  "gaze_training": {
+    "enabled": true,
+    "n_dots": 8,
+    "max_attempts": 3,
+    "radius_deg": 15.0,
+    "dwell_s": 1.0,
+    "dot_size_deg": 1.2,
+    "max_head_deviation_deg": 5.0,
+    "reference_yaw_deg": 0.0,
+    "reference_pitch_deg": 0.0,
+    "orders": [
+      [
+        5,
+        1,
+        4,
+        2,
+        7,
+        3,
+        6,
+        0
+      ],
+      [
+        4,
+        3,
+        0,
+        2,
+        6,
+        1,
+        7,
+        5
+      ],
+      [
+        7,
+        1,
+        0,
+        3,
+        4,
+        6,
+        5,
+        2
+      ]
+    ]
+  },
+  "parts": [
+    {
+      "part": 1,
+      "options": {
+        "self_paced": false,
+        "min_view_s": null,
+        "max_view_s": 0,
+        "allow_review_on_rerate": true
+      },
+      "n_groups": 3,
+      "trials": [
+        {
+          "block": "training",
+          "clip_id": "train_indoor",
+          "condition": "ours",
+          "group_index": 0,
+          "group_size": 0,
+          "position_in_group": 0,
+          "index": 0,
+          "file": "train_indoor__ours.mp4"
+        },
+        {
+          "block": "dummy",
+          "clip_id": "dummy_indoor",
+          "condition": "mono",
+          "cell": "",
+          "scene": "",
+          "repetition": 0,
+          "group_index": 1,
+          "group_size": 1,
+          "position_in_group": 0,
+          "index": 1,
+          "file": "dummy_indoor__mono.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "vin_A",
+          "condition": "deepsynthesis",
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "repetition": 0,
+          "group_index": 2,
+          "group_size": 4,
+          "position_in_group": 0,
+          "index": 2,
+          "file": "vin_A__deepsynthesis.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "vin_A",
+          "condition": "motionparallax",
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "repetition": 0,
+          "group_index": 2,
+          "group_size": 4,
+          "position_in_group": 1,
+          "index": 3,
+          "file": "vin_A__motionparallax.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "vin_A",
+          "condition": "mono",
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "repetition": 0,
+          "group_index": 2,
+          "group_size": 4,
+          "position_in_group": 2,
+          "index": 4,
+          "file": "vin_A__mono.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "vin_A",
+          "condition": "ours",
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "repetition": 0,
+          "group_index": 2,
+          "group_size": 4,
+          "position_in_group": 3,
+          "index": 5,
+          "file": "vin_A__ours.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "rout_A",
+          "condition": "ours",
+          "cell": "real_outdoor",
+          "scene": "outdoor",
+          "repetition": 0,
+          "group_index": 3,
+          "group_size": 4,
+          "position_in_group": 0,
+          "index": 6,
+          "file": "rout_A__ours.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "rout_A",
+          "condition": "deepsynthesis",
+          "cell": "real_outdoor",
+          "scene": "outdoor",
+          "repetition": 0,
+          "group_index": 3,
+          "group_size": 4,
+          "position_in_group": 1,
+          "index": 7,
+          "file": "rout_A__deepsynthesis.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "rout_A",
+          "condition": "motionparallax",
+          "cell": "real_outdoor",
+          "scene": "outdoor",
+          "repetition": 0,
+          "group_index": 3,
+          "group_size": 4,
+          "position_in_group": 2,
+          "index": 8,
+          "file": "rout_A__motionparallax.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "rout_A",
+          "condition": "mono",
+          "cell": "real_outdoor",
+          "scene": "outdoor",
+          "repetition": 0,
+          "group_index": 3,
+          "group_size": 4,
+          "position_in_group": 3,
+          "index": 9,
+          "file": "rout_A__mono.mp4"
+        }
+      ]
+    },
+    {
+      "part": 2,
+      "options": {
+        "self_paced": true,
+        "min_view_s": null,
+        "max_view_s": 0,
+        "allow_review_on_rerate": false
+      },
+      "trials": [
+        {
+          "block": "training",
+          "clip_id": "train_near",
+          "cond_a": "pa",
+          "cond_b": "paw",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "index": 0,
+          "pair_type": "real",
+          "file_a": "train_near__pa.mp4",
+          "file_b": "train_near__paw.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "near_A",
+          "cond_a": "paw",
+          "cond_b": "pa",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "index": 1,
+          "pair_type": "real",
+          "file_a": "near_A__paw.mp4",
+          "file_b": "near_A__pa.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "near_B",
+          "cond_a": "pa",
+          "cond_b": "pa",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "index": 2,
+          "pair_type": "same",
+          "file_a": "near_B__pa.mp4",
+          "file_b": "near_B__pa.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "near_A",
+          "cond_a": "paw",
+          "cond_b": "paw",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "index": 3,
+          "pair_type": "same",
+          "file_a": "near_A__paw.mp4",
+          "file_b": "near_A__paw.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "near_B",
+          "cond_a": "pa",
+          "cond_b": "paw",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "index": 4,
+          "pair_type": "real",
+          "file_a": "near_B__pa.mp4",
+          "file_b": "near_B__paw.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "near_A",
+          "cond_a": "pa",
+          "cond_b": "paw",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "index": 5,
+          "pair_type": "real",
+          "file_a": "near_A__pa.mp4",
+          "file_b": "near_A__paw.mp4"
+        },
+        {
+          "block": "main",
+          "clip_id": "near_B",
+          "cond_a": "paw",
+          "cond_b": "pa",
+          "reference_yaw_deg": 0.0,
+          "reference_pitch_deg": 0.0,
+          "cell": "virtual_indoor",
+          "scene": "indoor",
+          "index": 6,
+          "pair_type": "real",
+          "file_a": "near_B__paw.mp4",
+          "file_b": "near_B__pa.mp4"
+        }
+      ]
+    }
+  ]
+}

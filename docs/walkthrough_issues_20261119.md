@@ -66,5 +66,26 @@
 | 41 | 主试 Recenter | **用户同意（11-19）**：第二部分和注视练习的对准、播放、圆点亮起阶段屏蔽手动 Recenter，只允许在说明页、问题页和试次之间使用，屏蔽时状态栏提示 | Recenter 把当前头部水平朝向设为画面正前方，会移动参考方向，在测量头部偏离的阶段可能掩盖真实转头或引起误判；手动 Recenter（状态栏按钮、R 键）在注视练习每次尝试的对准与圆点阶段、第二部分每试次从对准到后一段播完（含转头提示与“不再提醒”选择）期间不可用，按钮变灰，按 R 时状态栏提示“当前阶段不可 Recenter”3 s，`events.csv` 记 `recenter_blocked`；各步骤开始时的自动 Recenter 不变；涉及 `StudyController.cs`、`StudyController.Steps.cs`、`StudyTexts.json`、`docs/subjective_study.md` | 已改（待复查） |
 | 42 | 结束页（英文） | 英文版结束语改成 Thank you for participation | `end_title` 英文改为 “Thank you for participation”（中文“实验完成，谢谢参与”不变）；头显内的 `end_hmd_title`（“实验结束，谢谢参与” / “The session is over. Thank you”）与中止页`aborted_title` 未改；测试中加入该句的断言；涉及 `StudyTexts.json`、`StudyTextsTests.cs` | 已改（待复查） |
 | 43 | 刺激生成（超分辨率） | **用户决定（11-19）**：超分统一用可控方法到 4K | DeepSynthesis 与 MotionParallax 的原生输出（MotionParallax 官方为 2048×1024）统一用同一种确定性插值放大到 Ours、Mono 刺激的分辨率；建议 FFmpeg `v360`（`input=e:output=e`、`in_stereo=tb:out_stereo=tb`、`interp=lanczos`，处理等距柱状左右接缝），两种方法同一命令与参数，写入刺激清单；目标分辨率在 173 盘点时与 Ours 刺激核对（文档现记 5768×5768 上下排列，待核实）；涉及刺激生成脚本（待写）、`docs/subjective_study.md` | 已记录；刺激尚未生成 |
+| 44 | 刺激生成（用户决定） | **用户决定（11-19）**：HELVIPAD 上下黑边保留；HELVIPAD 室内缺的 DS、MP 重跑；MP 3 m 上限按原样；25 fps；每段完整 12 s，Replica 不够的用 Gen 再生成（尽量不同场景）；Ours 用离线回放、所有方法每帧用对应深度，第一部分 Ours 为 PA；先生成解码测试片 | 见 `docs/stimulus_plan_20261119.md`（第 0 节记录决定，第 2–4 节为片段分配建议、生成任务与待确认项）；解码测试片已生成并放入 `Stimuli/train_indoor__ours.mp4` | 已记录；计划待确认 |
 
 11-19 第三轮修改说明（Claude）：第 27–42 条在 `Builds/staging` 离线编译（三个程序集 0 错误）与 EditMode 测试（28/28）通过；需用户停止 Play、等待编译后重新运行复查。
+
+## 视觉优化（11-19 18:00 起，流程开发完成后）
+
+| # | 步骤 | 问题（用户描述） | 理解与涉及文件 | 状态 |
+|---|---|---|---|---|
+| 44 | 全部界面 | 针对目前的界面做视觉优化，让它更美观；该加粗的字体加粗，该强调的强调 | 保留第 17 条的配色（暖色纸面、墨蓝单一强调色），取消“不加粗”的做法，改为三点。**字重层级**：标题、提示大字、题目与条目名（SSQ 症状名、被试编号、立体视问题、事后问卷问题）、主按钮、已选中的答案加粗，正文与说明小字不加粗。**句内强调**：文字表中用 `**…**` 括起关键动作词（黄色十字、保持不动、只转动眼睛、扳机键、不计入结果、正式实验等 24 条，只加标记不改措辞），电脑端显示为墨蓝加粗，头显内显示为琥珀色加粗；休息倒计时的秒数放大加粗；对准十字时“偏离 x° 保持不动”整行变绿加粗（与十字变绿一致）；播放提示条中的“前一段 / 后一段”用强调色；本组评分页的分数放大加粗。**形状**：卡片、按钮、输入框、复选框（选中为墨蓝底白色对勾）、头显面板与提示条改为圆角，电脑端卡片加柔和阴影；签到页“主试操作”与 QA 提示改为标题下的徽标；SSQ 页“请摘下头显……”由大字改为整行墨蓝横幅，并收紧行距，使中文版带横幅时不用滚动；头显内评分页把“立体感 / 观看舒适度 / 画面瑕疵”提为大标题、问题放在其下，五个选项左对齐并带分数圆标，“【练习】”“重评第 k 段”作为标题上方的徽标；“确认中止”“确认退出”改为红色按钮；状态栏突出编号与当前步骤，QA 模式为琥珀色。**不做的事**：答案选项（SSQ 程度、五级量表、−3…+3、有/没有、形状）一律同一中性样式，选中前不突出任何一个，以免影响作答；丢帧数不按阈值变色。数据记录、流程与按键不变。涉及 `StudyTheme.cs`、`StudyUi.cs`、`StudyButtonStyle.cs`、`FitTextToLine.cs`、`StudyController.cs`、`StudyController.Steps.cs`、`StudyTexts.json`，新增 `StudyMarkup.cs`、`StudyShapes.cs`、`StudyMarkupTests.cs` | 已改（待复查）；离线编译 0 错误，EditMode 40/40（新增 12 项）；**未在编辑器中运行，版面只按尺寸核算**，待确认项见 `docs/subjective_study.md` 第 6 节；改动前的版本即提交 `631dc33`（另有一份相同的备份在 `Builds/ui_preview/backup_before_visual_pass/`），设计示意图（HTML 绘制）在 `Builds/ui_preview/sketch_1…7.png` |
+
+## 头显实测第一轮（11-19 晚，Pico 4 Ultra 串流）
+
+| # | 步骤 | 问题（用户描述） | 理解与涉及文件 | 状态 |
+|---|---|---|---|---|
+| 45 | 语言选择与签到（头显内） | 开始登记信息时头显里显示“请稍候”，应改成“请先摘下头显，根据电脑屏幕完成指引” | `hmd_wait` 改为该句（英文 “Please take off the headset and follow the instructions on the computer screen”），只用于语言选择与签到两步；涉及 `StudyTexts.json` | 已改（待复查） |
+| 46 | 第二部分转头（已完整播放一遍后） | 已经完整播放一次后再转头，弹出提示时应可以选择直接看下一条或回放 | 该段已完整播放一遍（允许进入下一段）后再转头：弹出“这一段已经完整播放过一遍。可以继续，也可以重新对准十字后从头重播。”，按钮“看后一段”（前一段时）/“开始答题”（后一段时）与“重播这一段”；继续则以这次观看为该段的完整观看；重播则记为一次重播、重新对准后从头播放，不再弹普通提示或 3 次后的选择；`events.csv` 记 `part2_head_after_view`；涉及 `StudyController.Steps.cs`（`PlayPart2Segment`）、`StudyTexts.json`（`part2_head_done*`） | 已改（待复查） |
+| 47 | 第二部分播放中的文字 | 画面下方那行提示离中心较远，被试容易被吸引而转头 | **用户选择**：播放中不显示任何文字；“前一段”写在开始前的对准提示里，“后一段”在两段之间的灰屏显示，重播前的对准提示也带该段名称；何时可以继续在说明页写明（“每段完整播放一遍后，按扳机键（或空格键）进入下一段；播放时不显示文字，提前按无效”）；涉及 `StudyController.Steps.cs`（`ArmAdvance` 无提示键时不显示、`PlayPart2Segment`、`Part2Step`）、`StudyTexts.json`（`part2_intro`） | 已改（待复查） |
+| 48 | 转头判定阈值 | 实测 5° 非常容易触发，改成 7.5°？ | `gaze_training.max_head_deviation_deg` 由 5 改为 7.5（注视练习与第二部分播放中的转头判定共用）；朝向对准的 `alignment.tolerance_deg` 仍为 5°（开始时更接近十字，留 2.5° 余量）；两个配置文件、P01–P30 与 AP01 清单重新生成（与旧清单相比只有阈值、配置校验和与生成时间不同，试次顺序不变）；涉及 `study_config*.json`、`StudyTools/plans*`、`docs/subjective_study.md` | 已改（待复查） |
+| 49 | 第一部分观看（晕动） | 视频本身在平移时再转头特别晕；**用户选择**：先做 Replica 去掉相机转向与文字提示 | 实测 Replica 8 条无运动物体，相机 0.5 m/s 行走且视线沿路径转向（最高 60°/s，12 s 内累计 53°–274°）；按轨迹真值逐帧水平循环平移去掉转向（`tools/stimuli/yaw_stabilize.py`），四种方法同一平移；真实数据不做；已生成 4K 去转向对比片放在第二段练习 `train_outdoor__mono.mp4`（第一段 `train_indoor__ours.mp4` 为未去转向原片）；详见 `docs/stimulus_plan_20261119.md` D8 | 工具已完成；正式刺激生成时应用 |
+| 50 | 第一部分说明页 | 建议参与者在画面本身移动的时候减少主动转头探索 | `part1_intro` 加一条“画面本身在移动时，建议**少做主动转头**探索，以免头晕”（英文同步）；涉及 `StudyTexts.json` | 已改（待复查） |
+| 51 | 真实数据帧率 | 不要选加速的方案，要么插帧要么维持原速度，先做插帧样片看效果；1stDorm 只有 10 s 就用 10 s | HELVIPAD、PAIR360 原生 10 Hz（已核原文）；已生成 HELVIPAD REC_12_IN 的原生 10 fps 样片（B）与插帧 25 fps 样片（C），放在第一部分第 1 组（dummy）第 1 段（C）与第 4 段（B）；详见 `docs/stimulus_plan_20261119.md` D10、D11 与第 7 节 | 样片已生成；待用户在 Pico 中比较后决定 |
+
+11-19 头显实测第一轮修改说明（Claude）：第 45–50 条离线编译 0 错误，EditMode 测试 40/40（含 Fable 会话新增的测试）。

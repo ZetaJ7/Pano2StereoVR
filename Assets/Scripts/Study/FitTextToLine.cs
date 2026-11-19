@@ -28,6 +28,12 @@ namespace Pano2StereoVR.Study
             _lastText = null;
         }
 
+        /// <summary>Fit again on the next frame (the weight or style of the text changed).</summary>
+        public void Refit()
+        {
+            _lastText = null;
+        }
+
         private void Awake()
         {
             _text = GetComponent<Text>();

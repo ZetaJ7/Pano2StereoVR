@@ -377,19 +377,40 @@ namespace Pano2StereoVR.Study
                     PlaceHint(_rig.YawForward());
                 }
             }
-            string alert = string.IsNullOrEmpty(_s.BackupError)
-                ? ""
-                : "   <color=" + StudyTheme.RichHex(StudyTheme.StatusAlert) + ">" + TF("status_backup_failed", _s.BackupError) + "</color>";
+            _ui.SetStatus(StatusLine());
+        }
+
+        /// <summary>
+        /// Experimenter status bar: the participant ID (bold) and the current step stand out, QA mode is an amber
+        /// tag, the rest is quiet; backup and recenter notices are bold in the alert colour.
+        /// </summary>
+        private string StatusLine()
+        {
+            string sep = StudyTheme.Tint("  ·  ", StudyTheme.StatusDim);
+            string mode = _settings.IsQa
+                ? StudyTheme.Tint(_settings.Mode.ToUpperInvariant(), StudyTheme.StatusQa, true)
+                : _settings.Mode;
+            string step = (_s.Step + " " + _s.TrialLabel).Trim();
+            string line = StudyTheme.Tint(_s.Plan != null ? _s.Plan.ParticipantId : "-", StudyTheme.StatusStrong, true)
+                + sep + mode
+                + sep + StudyTheme.Tint(step, StudyTheme.StatusStrong)
+                + sep + "dropped " + _s.DroppedTotal.ToString(CultureInfo.InvariantCulture)
+                + sep + "XR " + (_rig.XrActive ? "on" : "off")
+                + sep + "eye " + (_s.PreviewEye < 0.5f ? "L" : "R")
+                + sep + (_s.Log != null ? _s.Log.Directory : _settings.DataDir);
+            if (_s.Finished && !_s.EndReady)
+            {
+                line += sep + T("status_saving");
+            }
+            if (!string.IsNullOrEmpty(_s.BackupError))
+            {
+                line += sep + StudyTheme.Tint(TF("status_backup_failed", _s.BackupError), StudyTheme.StatusAlert, true);
+            }
             if (Time.realtimeSinceStartup < _recenterNoticeUntil)
             {
-                alert += "   <color=" + StudyTheme.RichHex(StudyTheme.StatusAlert) + ">" + T("status_recenter_locked") + "</color>";
+                line += sep + StudyTheme.Tint(T("status_recenter_locked"), StudyTheme.StatusAlert, true);
             }
-            string saving = _s.Finished && !_s.EndReady ? "   " + T("status_saving") : "";
-            _ui.SetStatus(string.Format(CultureInfo.InvariantCulture,
-                "{0} | {1} | {2} {3} | dropped {4} | XR {5} | eye {6} | {7}{8}{9}",
-                _s.Plan != null ? _s.Plan.ParticipantId : "-", _settings.Mode, _s.Step, _s.TrialLabel, _s.DroppedTotal,
-                _rig.XrActive ? "on" : "off", _s.PreviewEye < 0.5f ? "L" : "R",
-                _s.Log != null ? _s.Log.Directory : _settings.DataDir, saving, alert));
+            return line;
         }
 
         private static bool IsTyping()
@@ -521,17 +542,21 @@ namespace Pano2StereoVR.Study
 
             _ui.ClearDesktop();
             Transform c = _ui.DesktopContent;
+            StudyTheme.Palette light = StudyTheme.Light;
             _ui.Title(c, T("checkin_title"));
-            _ui.Secondary(c, T("checkin_subtitle"), TextAnchor.MiddleCenter);
+            // who the page is for, and the QA notice, as tags under the title
+            RectTransform tags = _ui.BadgeRow(c);
+            _ui.Badge(tags, T("checkin_subtitle"), light.Tag, light.OnTag);
             if (_settings.IsQa)
             {
-                _ui.Colored(c, T("checkin_qa_badge"), StudyTheme.Light.Warning, TextAnchor.MiddleCenter, 19);
+                _ui.Badge(tags, T("checkin_qa_badge"), light.WarningTint, light.Warning);
             }
             _ui.Spacer(c, 16);
             _ui.Secondary(c, T("checkin_hint"));
             RectTransform row = _ui.NewRow(c, 16, TextAnchor.MiddleLeft, 56);
-            Text label = _ui.Body(row, T("checkin_pid"), TextAnchor.MiddleLeft);
-            label.gameObject.AddComponent<LayoutElement>().preferredWidth = 200;
+            Text label = _ui.Strong(row, T("checkin_pid"), TextAnchor.MiddleLeft);
+            label.gameObject.AddComponent<LayoutElement>().minWidth = 200; // wider when the label needs it (bold, English)
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
             InputField pid = _ui.NewInput(row, _settings.ParticipantId, 26, 320, 52, false, "Input_Pid");
             Text status = null;
             _ui.NewButton(row, T("checkin_load"), 24, () => TryLoadPlan(pid.text.Trim(), status), 220, 52, ButtonKind.Secondary, "Btn_Load");
@@ -558,11 +583,11 @@ namespace Pano2StereoVR.Study
 
         private void TryLoadPlan(string participantId, Text status)
         {
-            string err = StudyTheme.RichHex(StudyTheme.Light.Error);
-            string warn = StudyTheme.RichHex(StudyTheme.Light.Warning);
+            Color err = StudyTheme.Light.Error;
+            Color warn = StudyTheme.Light.Warning;
             if (string.IsNullOrEmpty(participantId))
             {
-                status.text = "<color=" + err + ">" + T("checkin_need_pid") + "</color>";
+                status.text = StudyTheme.Tint(T("checkin_need_pid"), err, true);
                 return;
             }
             string path = _settings.PlanPath(participantId);
@@ -581,17 +606,17 @@ namespace Pano2StereoVR.Study
                 _s.MissingStimuli.AddRange(StudyDataLogger.MissingStimuli(_settings.StimuliDir, files));
                 _s.SessionDir = StudyDataLogger.NewSessionDirectory(_settings.DataDir, participantId, DateTime.UtcNow, out bool existed);
                 _s.SessionDirExisted = existed;
-                var lines = new List<string> { TF("checkin_loaded", participantId) };
+                var lines = new List<string> { StudyTheme.Tint(TF("checkin_loaded", participantId), StudyTheme.Light.Success, true) };
                 if (_s.MissingStimuli.Count > 0)
                 {
                     lines.Add(_settings.IsQa
-                        ? "<color=" + warn + ">" + TF("checkin_missing_qa", _s.MissingStimuli.Count) + "</color>"
-                        : "<color=" + err + ">" + TF("checkin_missing_blocked", _s.MissingStimuli.Count) + "</color>");
+                        ? StudyTheme.Tint(TF("checkin_missing_qa", _s.MissingStimuli.Count), warn, true)
+                        : StudyTheme.Tint(TF("checkin_missing_blocked", _s.MissingStimuli.Count), err, true));
                     Debug.LogWarning("[Study] missing stimuli under " + _settings.StimuliDir + ":\n" + string.Join("\n", _s.MissingStimuli));
                 }
                 if (existed)
                 {
-                    lines.Add("<color=" + warn + ">" + T("checkin_existing_data") + "</color>");
+                    lines.Add(StudyTheme.Tint(T("checkin_existing_data"), warn));
                 }
                 status.text = string.Join("\n", lines);
                 LogEvent("plan_loaded", path + " sha256=" + _s.PlanSha256);
@@ -604,7 +629,7 @@ namespace Pano2StereoVR.Study
             catch (Exception e)
             {
                 _s.Plan = null;
-                status.text = "<color=" + err + ">" + TF("checkin_load_failed", e.Message) + "</color>";
+                status.text = StudyTheme.Tint(TF("checkin_load_failed", e.Message), err, true);
                 LogEvent("plan_load_failed", path + ": " + e.Message);
             }
         }
@@ -807,7 +832,7 @@ namespace Pano2StereoVR.Study
             _exitConfirmRow = _ui.NewRow(c, 20, TextAnchor.MiddleCenter, 60);
             Text q = _ui.Secondary(_exitConfirmRow, T("end_exit_question"), TextAnchor.MiddleRight);
             q.gameObject.AddComponent<LayoutElement>().preferredWidth = 260;
-            Button confirm = _ui.NewButton(_exitConfirmRow, T("end_exit_confirm"), 22, OnExitConfirmed, 220, 54, ButtonKind.Primary, "Btn_ExitConfirm");
+            Button confirm = _ui.NewButton(_exitConfirmRow, T("end_exit_confirm"), 22, OnExitConfirmed, 220, 54, ButtonKind.Danger, "Btn_ExitConfirm");
             Button cancel = _ui.NewButton(_exitConfirmRow, T("cancel"), 22, OnExitCancelled, 180, 54, ButtonKind.Secondary, "Btn_ExitCancel");
             _exitConfirmRow.gameObject.SetActive(false);
             foreach (Button b in new[] { exit, next, confirm, cancel })
@@ -890,12 +915,7 @@ namespace Pano2StereoVR.Study
                 Destroy(_abortPanel.gameObject);
             }
             StudyTheme.Palette p = StudyTheme.Light;
-            RectTransform outer = StudyUi.NewRect("AbortPanel", _ui.DesktopCanvas.transform);
-            outer.sizeDelta = new Vector2(960, 400);
-            outer.gameObject.AddComponent<Image>().color = p.CardBorder;
-            RectTransform inner = StudyUi.NewRect("AbortCard", outer);
-            StudyUi.Stretch(inner, 1f);
-            inner.gameObject.AddComponent<Image>().color = p.Card;
+            RectTransform outer = _ui.NewCardFrame(_ui.DesktopCanvas.transform, "AbortPanel", new Vector2(958, 398), p, out RectTransform inner);
             var v = inner.gameObject.AddComponent<VerticalLayoutGroup>();
             v.padding = new RectOffset(48, 48, 36, 36);
             v.spacing = 16;
@@ -903,10 +923,10 @@ namespace Pano2StereoVR.Study
             v.childControlWidth = true;
             v.childForceExpandHeight = false;
             v.childAlignment = TextAnchor.MiddleCenter;
-            _ui.Colored(inner, T("abort_title"), p.Error, TextAnchor.MiddleCenter, 30);
+            _ui.Colored(inner, T("abort_title"), p.Error, TextAnchor.MiddleCenter, 30, true);
             _abortReason = _ui.NewInput(inner, "", 22, 860, 110, true, "Input_AbortReason");
             RectTransform row = _ui.NewRow(inner, 20, TextAnchor.MiddleCenter, 60);
-            _ui.NewButton(row, T("abort_confirm"), 22, ConfirmAbort, 260, 56, ButtonKind.Primary, "Btn_AbortConfirm");
+            _ui.NewButton(row, T("abort_confirm"), 22, ConfirmAbort, 260, 56, ButtonKind.Danger, "Btn_AbortConfirm");
             _ui.NewButton(row, T("cancel"), 22, () => _abortPanel.gameObject.SetActive(false), 200, 56, ButtonKind.Secondary, "Btn_AbortCancel");
             _abortPanel = outer;
         }

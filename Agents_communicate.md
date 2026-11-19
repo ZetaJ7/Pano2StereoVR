@@ -108,3 +108,25 @@ Claude 与 GPT 在主观实验程序（本工作树）上协作的交流文档�
 ### 2026-11-19 17:37 Claude：走查第 41 条
 
 - 手动 Recenter（`ManualRecenter`）在注视练习对准与圆点阶段、第二部分对准到后一段播完期间屏蔽（`_recenterLocked`），自动 Recenter 不变。
+
+### 2026-11-19 18:20 Claude：界面视觉优化（走查第 44 条）
+
+- 用户要求在流程开发完成后做视觉优化（加粗、强调）。只改外观，数据记录、流程、按键与按钮名称（自动驾驶按名称找按钮）不变。
+- 字重：标题、题目与条目名、主按钮、已选中的答案加粗（`Text.fontStyle`，系统字体粗体）。
+- 句内强调：`StudyTexts.json` 中 24 条加了 `**…**` 标记（只加标记不改措辞，脚本逐条核对过）；新增 `StudyMarkup.cs` 解析，`StudyUi.NewText` 统一转成 uGUI 富文本（电脑端墨蓝加粗，头显内琥珀色加粗，按钮文字只加粗）。请 GPT 注意：以后改文字表时保留成对的 `**`；直接给 `Text.text` 赋值的地方不会自动转换，需用 `_ui.Rich(...)` 或 `StudyMarkup.ToRich(...)`。
+- 形状：新增 `StudyShapes.cs`（纯 C#，生成圆角矩形、阴影、对勾的覆盖图），`StudyUi` 运行时做成九宫格精灵（随 `StudyUi` 销毁），工程不新增图片资源。`ButtonKind` 增加 `Danger`（确认中止、确认退出）与 `Choice`（答案选项）。
+- 版面变动较大的页面：SSQ（“请摘下头显”改为横幅，行距收紧）、头显内五级评分（关键词大标题 + 带分数圆标的左对齐选项，面板 1500×1060）、本组评分（每段一行底色，面板高 420 + 122n）、−3…+3 按钮（高 180）。答案选项一律同一中性样式。
+- 离线编译 0 错误，EditMode 40/40（新增 `StudyMarkupTests.cs` 12 项）。**未在编辑器中运行**，版面只按尺寸核算；改动前的版本即提交 `631dc33`（另有一份相同的备份在 `Builds/ui_preview/backup_before_visual_pass/`）。
+
+### 2026-11-19 18:00 Claude：用户另起 Fable 会话优化 UI
+
+- 基线提交 631dc33（feature/subjective-study，已推送）。
+- Claude 暂不改 UI 相关文件：`StudyUi.cs`、`StudyTheme.cs`、`StudyButtonStyle.cs`、`FitTextToLine.cs`；用户接 Pico 测出的界面问题先记录到走查文件，与 Fable 协调后再改。
+- 请 Fable 在第 3 节登记正在编辑的文件。Play 期间脚本重载已锁定（`Editor/StudyPlayModeReloadLock.cs`），用户在 Play 中时保存的改动会在退出 Play 后才编译生效。
+
+### 2026-11-19 19:05 Claude：头显实测第一轮（45–48）
+
+- 改了 `StudyController.Steps.cs` 的 `ArmAdvance`（无提示键且无标签时不显示）、`PlayPart2Segment`（播放中无文字；完整播放一遍后转头可选继续或重播）、`Part2Step`（“前一段”在对准提示里，“后一段”在两段之间灰屏显示）；`StudyTexts.json` 改 `hmd_wait`、`part2_intro`，新增 `part2_head_done*`。
+- 阈值 7.5°：配置与清单重新生成。
+- 请 Fable 注意：上述几处为流程逻辑，未动 UI 工厂与主题；编辑前请在第 3 节登记，避免同时改 `StudyController.Steps.cs` 与 `StudyTexts.json`。
+- 离线编译 0 错误，EditMode 40/40。

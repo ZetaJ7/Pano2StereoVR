@@ -44,27 +44,23 @@ namespace Pano2StereoVR.Study
             Text timer = null;
             if (noticeKey != null)
             {
-                _ui.Notice(c, T(noticeKey), null);
-                _ui.Spacer(c, 8);
+                _ui.Banner(c, T(noticeKey));
             }
             if (isBreak)
             {
                 timer = _ui.Colored(c, "", StudyTheme.Light.TextSecondary, TextAnchor.MiddleCenter, 28);
-                _ui.Spacer(c, 8);
             }
             _ui.Title(c, T("ssq_title"));
             _ui.Secondary(c, T("ssq_instruction"), TextAnchor.MiddleCenter);
-            _ui.Spacer(c, 6);
             string[] levels = { T("ssq_level_0"), T("ssq_level_1"), T("ssq_level_2"), T("ssq_level_3") };
             var rows = new List<StudyUi.ChoiceRow>();
-            RectTransform[] cols = _ui.NewColumns(c, 2, 60, 12);
+            RectTransform[] cols = _ui.NewColumns(c, 2, 60, 8);
             int half = (StudySchema.SsqItems.Length + 1) / 2;
             for (int i = 0; i < StudySchema.SsqItems.Length; i++)
             {
                 string key = "ssq_" + StudySchema.SsqItems[i];
                 rows.Add(_ui.NewChoiceRow(cols[i < half ? 0 : 1], T(key), StudyTexts.Note(key), levels, 24, 21, 248, 98, 52));
             }
-            _ui.Spacer(c, 10);
             RectTransform submitRow = _ui.NewRow(c, 0, TextAnchor.MiddleCenter, 72);
             Button submit = _ui.NewButton(submitRow, T(isBreak ? "break_continue" : "submit"), 30, () =>
             {
@@ -83,7 +79,7 @@ namespace Pano2StereoVR.Study
                 float left = minBreakSeconds - (Time.realtimeSinceStartup - t0);
                 if (timer != null)
                 {
-                    timer.text = left > 0 ? TF("break_timer", Mathf.CeilToInt(left)) : T("break_timer_done");
+                    timer.text = BreakTimerText(left, 0);
                 }
                 submit.interactable = complete && left <= 0;
                 yield return null;
@@ -111,13 +107,17 @@ namespace Pano2StereoVR.Study
             _ui.BodyBlock(c, TF("break_body", Mathf.RoundToInt(minBreakSeconds)), 900, 30);
             _ui.Spacer(c, 16);
             Text timer = _ui.Colored(c, "", StudyTheme.Light.TextSecondary, TextAnchor.MiddleCenter, 30);
+            // fixed height: the line is tall while the seconds are shown large, and the page must not jump when it ends
+            var timerSlot = timer.gameObject.AddComponent<LayoutElement>();
+            timerSlot.minHeight = 104;
+            timerSlot.preferredHeight = 104;
             _ui.Spacer(c, 24);
             RectTransform row = _ui.NewRow(c, 0, TextAnchor.MiddleCenter, 76);
             Button go = _ui.NewButton(row, T("break_ready"), 30, () => ready = true, 420, 72, ButtonKind.Primary, "Btn_Continue");
             while (!ready && !Interrupted)
             {
                 float left = minBreakSeconds - (Time.realtimeSinceStartup - t0);
-                timer.text = left > 0 ? TF("break_timer", Mathf.CeilToInt(left)) : T("break_timer_done");
+                timer.text = BreakTimerText(left, 76);
                 go.interactable = left <= 0;
                 yield return null;
             }
@@ -126,6 +126,25 @@ namespace Pano2StereoVR.Study
             WriteSession();
             LogEvent("break_end", CsvLog.Format(breakS) + " s" + (ready ? "" : " (skipped)"));
             _ui.ShowDesktopPanel(false);
+        }
+
+        /// <summary>
+        /// Break countdown with the remaining seconds bold in the accent colour (large when digitSize is given);
+        /// the closing line once the minimum break is over.
+        /// </summary>
+        private string BreakTimerText(float left, int digitSize)
+        {
+            StudyTheme.Palette p = StudyTheme.Light;
+            if (left <= 0f)
+            {
+                return StudyMarkup.ToRich(T("break_timer_done"), p.Emphasis);
+            }
+            string seconds = StudyTheme.Tint(Mathf.CeilToInt(left).ToString(CultureInfo.InvariantCulture), p.Emphasis, true);
+            if (digitSize > 0)
+            {
+                seconds = "<size=" + digitSize.ToString(CultureInfo.InvariantCulture) + ">" + seconds + "</size>";
+            }
+            return StudyMarkup.ToRich(TF("break_timer", seconds), p.Emphasis);
         }
 
         // ------------------------------------------------------------------ headset fitting
@@ -251,7 +270,8 @@ namespace Pano2StereoVR.Study
                 _ui.ClearHmd();
                 _ui.SetHmdSize(1760, 380);
                 _ui.PlaceHmdCanvas(_rig.HeadPosition, fwd, PanelDistance, -0.68f);
-                _ui.Body(_ui.HmdContent, (trial.Block == "practice" ? T("practice_label") + "  " : "") + T("stereo_question"), TextAnchor.MiddleCenter);
+                _ui.Strong(_ui.HmdContent, (trial.Block == "practice" ? StudyMarkup.Em(T("practice_label")) + "  " : "") + T("stereo_question"),
+                    TextAnchor.MiddleCenter);
                 RectTransform row = _ui.NewRow(_ui.HmdContent, 18, TextAnchor.MiddleCenter, 112);
                 for (int s = 0; s < st.Shapes.Count; s++)
                 {
@@ -316,10 +336,10 @@ namespace Pano2StereoVR.Study
             _alignRing.SetActive(true);
             SetAlignFeedback(false, 0f);
             _ui.ClearHmd();
-            _ui.SetHmdSize(1500, 250);
+            _ui.SetHmdSize(1500, 270);
             _ui.PlaceHmdCanvas(_rig.HeadPosition, Quaternion.Euler(0f, refYaw, 0f) * Vector3.forward, PanelDistance, panelDrop);
             _ui.Body(_ui.HmdContent, cueText, TextAnchor.MiddleCenter);
-            Text devText = _ui.Note(_ui.HmdContent, "", TextAnchor.MiddleCenter);
+            Text devText = _ui.Secondary(_ui.HmdContent, "", TextAnchor.MiddleCenter, 34);
             _aligning = true;
             _alignYaw = refYaw;
             _alignPitch = refPitch;
@@ -341,7 +361,8 @@ namespace Pano2StereoVR.Study
                 }
                 float progress = !inside ? 0f : (a.DwellSeconds <= 0f ? 1f : (now - insideSince) / a.DwellSeconds);
                 SetAlignFeedback(inside, progress);
-                devText.text = TF("align_deviation", dev.ToString("0.0", CultureInfo.InvariantCulture)) + (inside ? "      " + T("align_hold") : "");
+                string devLine = TF("align_deviation", dev.ToString("0.0", CultureInfo.InvariantCulture));
+                devText.text = inside ? StudyTheme.Tint(devLine + "      " + T("align_hold"), StudyTheme.Dark.Success, true) : devLine;
                 if (inside && progress >= 1f)
                 {
                     break;
@@ -559,7 +580,7 @@ namespace Pano2StereoVR.Study
             if (!string.IsNullOrEmpty(_hintLabel))
             {
                 _hintFollowHead = hintFollowsHead;
-                _ui.ShowHint(_hintLabel);
+                _ui.ShowHint(StudyMarkup.Em(_hintLabel));
                 PlaceHint(hintFollowsHead ? _rig.YawForward() : Quaternion.Euler(0f, hintYaw, 0f) * Vector3.forward);
             }
             return new PlayRequest
@@ -582,8 +603,14 @@ namespace Pano2StereoVR.Study
             _advanceRequested = false;
             _triggerSeen = _pointer != null ? _pointer.TriggerPresses : 0;
             _hintFollowHead = followHead;
-            string text = T(hintKey);
-            _ui.ShowHint(string.IsNullOrEmpty(_hintLabel) ? text : _hintLabel + "      " + text);
+            // hintKey null and no label: no text at all (Part 2 playback, user 11-19: the line below the view drew the head away)
+            string text = string.IsNullOrEmpty(hintKey) ? "" : T(hintKey);
+            if (text.Length == 0 && string.IsNullOrEmpty(_hintLabel))
+            {
+                return;
+            }
+            _ui.ShowHint(string.IsNullOrEmpty(_hintLabel) ? text
+                : text.Length == 0 ? StudyMarkup.Em(_hintLabel) : StudyMarkup.Em(_hintLabel) + "      " + text);
             PlaceHint(followHead ? _rig.YawForward() : Quaternion.Euler(0f, hintYaw, 0f) * Vector3.forward);
         }
 
@@ -664,9 +691,16 @@ namespace Pano2StereoVR.Study
                         headOut = true;
                         outDeg = dev;
                     }
-                }, T(labelKey));
+                }, null, null); // user 11-19: no text during Part 2 playback
                 Func<bool> abort = req.Abort;
                 req.Abort = () => headOut || (abort != null && abort());
+                bool fullViewed = false; // the clip has played completely once (advancing allowed)
+                Action allowed = req.AdvanceAllowed;
+                req.AdvanceAllowed = () =>
+                {
+                    fullViewed = true;
+                    allowed?.Invoke();
+                };
                 yield return _clips.Play(s, req, stats);
                 StopAdvance();
                 ShowGray();
@@ -677,6 +711,26 @@ namespace Pano2StereoVR.Study
                     result.MaxDeg = max;
                     result.ReminderOff = !check;
                     yield break;
+                }
+
+                if (fullViewed)
+                {
+                    // user 11-19: the clip has already played completely once, so the participant may go on or replay it
+                    int pick = -1;
+                    yield return AskTwoText(T("part2_head_title"), T("part2_head_done"),
+                        seg == "A" ? "part2_head_done_next_a" : "part2_head_done_next_b", "part2_head_done_replay", v => pick = v);
+                    bool goOn = Interrupted || pick != 0;
+                    LogEvent("part2_head_after_view", string.Format(CultureInfo.InvariantCulture,
+                        "trial {0} segment {1}: {2:0.0} deg > {3:0.0} at {4:0.00} s after a complete viewing: {5}", t.Index, seg,
+                        outDeg, threshold, stats.ViewSeconds, goOn ? "go on" : "replay"));
+                    if (goOn)
+                    {
+                        head.AddRange(rows);
+                        result.Stats = stats;
+                        result.MaxDeg = max;
+                        result.ReminderOff = !check;
+                        yield break;
+                    }
                 }
 
                 // stopped by a head turn: keep the record of this viewing, explain, re-align, replay from the start
@@ -693,7 +747,11 @@ namespace Pano2StereoVR.Study
                     "trial {0} segment {1}: {2:0.0} deg > {3:0.0} at {4:0.00} s, restart {5}", t.Index, seg, outDeg, threshold,
                     stats.ViewSeconds, result.Restarts));
                 s = _clips.Prepare(slotIndex, StimulusPath(file));
-                if (done >= HeadRestartsBeforeChoice && done % HeadRestartsBeforeChoice == 0)
+                if (fullViewed)
+                {
+                    // the participant chose to replay after a complete viewing: no further prompt
+                }
+                else if (done >= HeadRestartsBeforeChoice && done % HeadRestartsBeforeChoice == 0)
                 {
                     int choice = -1;
                     yield return AskTwoText(T("part2_head_choice_title"), TF("part2_head_choice", done),
@@ -726,7 +784,8 @@ namespace Pano2StereoVR.Study
                 }
                 yield return _clips.WaitPrepared(s, PrepareTimeoutSeconds);
                 yield return AlignToReference(t.ReferenceYawDeg, t.ReferencePitchDeg,
-                    (t.IsMain ? "" : T("practice_label") + "  ") + T("part2_cue"), -0.42f, (a, d) => { });
+                    (t.IsMain ? "" : StudyMarkup.Em(T("practice_label")) + "  ") + StudyMarkup.Em(T(labelKey)) + "  " + T("part2_cue"),
+                    -0.42f, (a, d) => { });
                 if (Interrupted)
                 {
                     yield break;
@@ -793,7 +852,8 @@ namespace Pano2StereoVR.Study
                 _recenterLocked = true; // user 11-19: no manual recenter from the alignment to the end of the second clip
                 float alignS = 0f, startDev = 0f;
                 yield return AlignToReference(t.ReferenceYawDeg, t.ReferencePitchDeg,
-                    (t.IsMain ? "" : T("practice_label") + "  ") + T("part2_cue"), -0.42f, (a, d) => { alignS = a; startDev = d; });
+                    (t.IsMain ? "" : StudyMarkup.Em(T("practice_label")) + "  ") + StudyMarkup.Em(T("segment_first")) + "  " + T("part2_cue"),
+                    -0.42f, (a, d) => { alignS = a; startDev = d; });
                 bool playedA = false, playedB = false;
                 var segA = new Part2Segment();
                 var segB = new Part2Segment();
@@ -803,7 +863,9 @@ namespace Pano2StereoVR.Study
                     statsA = segA.Stats;
                     maxA = segA.MaxDeg;
                     playedA = true;
+                    ShowHmdNotice("segment_second", null); // user 11-19: clip labels appear only outside playback
                     yield return Wait(tm.GapBetweenAbSeconds);
+                    _ui.ShowHmd(false);
                 }
                 if (!Interrupted)
                 {
@@ -1202,7 +1264,7 @@ namespace Pano2StereoVR.Study
         {
             int answer = -2;
             _ui.ClearHmd();
-            _ui.SetHmdSize(1760, 420 + 118 * recs.Count);
+            _ui.SetHmdSize(1760, 420 + 122 * recs.Count);
             _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
             _ui.Title(_ui.HmdContent, title);
             _ui.Note(_ui.HmdContent, T("group_summary_hint"), TextAnchor.MiddleCenter);
@@ -1210,16 +1272,18 @@ namespace Pano2StereoVR.Study
             {
                 int idx = k;
                 RatingRecord r = recs[k];
-                RectTransform row = _ui.NewRow(_ui.HmdContent, 24, TextAnchor.MiddleCenter, 100);
-                string text = TF("group_segment", k + 1) + "      " + T("scale_depth_short") + " " + r.Depth + "     "
-                    + T("scale_comfort_short") + " " + r.Comfort + "     " + T("scale_artifact_short") + " " + r.Artifact;
+                RectTransform row = _ui.NewRow(_ui.HmdContent, 20, TextAnchor.MiddleCenter, 104);
+                _ui.Fill(row, StudyTheme.Dark.RowFill);
+                row.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(36, 14, 0, 0);
+                string text = "<b>" + TF("group_segment", k + 1) + "</b>      " + SummaryScore("scale_depth_short", r.Depth) + "     "
+                    + SummaryScore("scale_comfort_short", r.Comfort) + "     " + SummaryScore("scale_artifact_short", r.Artifact);
                 Text label = _ui.Body(row, text, TextAnchor.MiddleLeft, 36);
-                label.gameObject.AddComponent<LayoutElement>().preferredWidth = 1000;
+                label.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1; // the buttons sit at the right end of the row
                 if (allowReplay)
                 {
-                    _ui.HmdButton(row, T("group_replay"), () => answer = 100 + idx, 200, 88, 34, ButtonKind.Secondary, "Btn_Replay_" + (k + 1));
+                    _ui.HmdButton(row, T("group_replay"), () => answer = 100 + idx, 200, 80, 34, ButtonKind.Secondary, "Btn_Replay_" + (k + 1));
                 }
-                _ui.HmdButton(row, T("group_rerate"), () => answer = idx, 200, 88, 34, ButtonKind.Secondary, "Btn_Edit_" + (k + 1));
+                _ui.HmdButton(row, T("group_rerate"), () => answer = idx, 200, 80, 34, ButtonKind.Secondary, "Btn_Edit_" + (k + 1));
                 if (k < 9)
                 {
                     _ui.AddShortcut(KeyCode.Alpha1 + k, () => answer = idx);
@@ -1238,6 +1302,14 @@ namespace Pano2StereoVR.Study
             result(answer);
         }
 
+        /// <summary>"Depth 4" for the summary row: the scale name quiet, the participant's own score large and bold.</summary>
+        private static string SummaryScore(string labelKey, int value)
+        {
+            StudyTheme.Palette p = StudyTheme.Dark;
+            return StudyTheme.Tint(T(labelKey), p.TextSecondary) + " <size=44>"
+                + StudyTheme.Tint(value.ToString(CultureInfo.InvariantCulture), p.Emphasis, true) + "</size>";
+        }
+
         // ------------------------------------------------------------------ post-questionnaire
         private IEnumerator PostQuestionnaireStep()
         {
@@ -1249,7 +1321,7 @@ namespace Pano2StereoVR.Study
             Transform c = _ui.DesktopContent;
             _ui.Title(c, T("post_title"));
             _ui.Spacer(c, 8);
-            _ui.Body(c, T("post_comments"));
+            _ui.Strong(c, T("post_comments"));
             InputField comments = _ui.NewInput(c, "", 26, 1400, 220, true, "Input_Comments");
             _ui.Spacer(c, 8);
             RectTransform row = _ui.NewRow(c, 0, TextAnchor.MiddleCenter, 72);
@@ -1355,13 +1427,14 @@ namespace Pano2StereoVR.Study
             _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
             _ui.Title(_ui.HmdContent, T("part2_q2"));
             _ui.Spacer(_ui.HmdContent, 10);
-            RectTransform row = _ui.NewRow(_ui.HmdContent, 10, TextAnchor.MiddleCenter, 170);
+            RectTransform row = _ui.NewRow(_ui.HmdContent, 10, TextAnchor.MiddleCenter, 190);
             string[] keys = { "pref_m3", "pref_m2", "pref_m1", "pref_0", "pref_p1", "pref_p2", "pref_p3" };
             for (int k = 0; k < keys.Length; k++)
             {
                 int value = k - 3;
-                _ui.HmdButton(row, (value > 0 ? "+" : "") + value + "\n" + T(keys[k]), () => answer = value, 232, 160, 30,
-                    ButtonKind.Secondary, "Btn_Pref_" + (k + 1));
+                string number = (value > 0 ? "+" : "") + value.ToString(CultureInfo.InvariantCulture);
+                _ui.HmdButton(row, "<size=44><b>" + number + "</b></size>\n" + T(keys[k]), () => answer = value, 232, 180, 30,
+                    ButtonKind.Choice, "Btn_Pref_" + (k + 1));
                 _ui.AddShortcut(KeyCode.Alpha1 + k, () => answer = value);
             }
             while (answer == null && !Interrupted)
@@ -1382,16 +1455,15 @@ namespace Pano2StereoVR.Study
             int answer = 0;
             float shown = Time.realtimeSinceStartup;
             _ui.ClearHmd();
-            _ui.SetHmdSize(1500, 1000);
+            _ui.SetHmdSize(1500, 1060);
             _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
-            _ui.Title(_ui.HmdContent, prefix + T(titleKey), StudyTheme.Dark.TitleSize - 6);
-            _ui.Spacer(_ui.HmdContent, 4);
+            _ui.QuestionHeader(_ui.HmdContent, prefix, T(titleKey));
             for (int score = 5; score >= 1; score--)
             {
                 int s = score;
-                RectTransform row = _ui.NewRow(_ui.HmdContent, 0, TextAnchor.MiddleCenter, 116);
-                Button b = _ui.HmdButton(row, s + "    " + T(optionPrefix + "_" + s), () => answer = s, 1200, 108, 38,
-                    ButtonKind.Secondary, "Btn_Score_" + s);
+                RectTransform row = _ui.NewRow(_ui.HmdContent, 0, TextAnchor.MiddleCenter, 112);
+                Button b = _ui.HmdScaleOption(row, s.ToString(CultureInfo.InvariantCulture), T(optionPrefix + "_" + s), () => answer = s,
+                    1200, 108, 38, "Btn_Score_" + s);
                 if (s == current)
                 {
                     b.GetComponent<StudyButtonStyle>().SetSelected(true);

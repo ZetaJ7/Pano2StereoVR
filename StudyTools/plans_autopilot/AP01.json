@@ -2,10 +2,10 @@
   "plan_format_version": 4,
   "study_id": "Pano2Stereo-E5",
   "config_version": "autopilot-desktop-check-2026-11-19c",
-  "config_sha256": "a3dd32707ec62eb3a37bf8b8788f4720c1b49d854471cec43c44db3e7ee08b84",
+  "config_sha256": "43db689370e75b57a8f375893b87353ffbedd900daa23b010d14f968679cac7e",
   "participant_id": "AP01",
   "seed": 103066360963394,
-  "generated_utc": "2026-11-19T07:48:14+00:00",
+  "generated_utc": "2026-11-19T11:02:38+00:00",
   "timing": {
     "clip_s": 3.0,
     "gap_between_ab_s": 1.0,
@@ -73,7 +73,7 @@
     "radius_deg": 15.0,
     "dwell_s": 1.0,
     "dot_size_deg": 1.2,
-    "max_head_deviation_deg": 5.0,
+    "max_head_deviation_deg": 7.5,
     "reference_yaw_deg": 0.0,
     "reference_pitch_deg": 0.0,
     "orders": [

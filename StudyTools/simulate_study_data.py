@@ -1,10 +1,13 @@
-"""Write SIMULATED participant folders in the Unity study-mode format (data contract v5), for testing analyze_study.py.
+"""Write SIMULATED participant folders in the Unity study-mode format (data contract v6), for testing analyze_study.py.
 
 The output is for checking the data pipeline only. Every session.json is marked "simulated": true
 and analyze_study.py prints a banner when it sees such sessions. Never mix this output with real data.
 The generator also writes one aborted duplicate session folder and one checkin.json with the
 pre-v3 field name, so that the analysis paths for both cases are exercised. One session carries rows
-flagged skipped = 1 (QA skip control), which the analysis must drop.
+flagged skipped = 1 (QA skip control), which the analysis must drop; in that session the natural viewing range
+measurement is skipped as well, so its PAw radius is the default (15 deg). The other sessions get plausible
+continuous sweeps (eyerange.csv, eyerange_trace.csv at 30 frames per second) and the radius chosen by the same
+provisional rule as the study program.
 
 Usage:
     python simulate_study_data.py --plans plans --out _simulated_data
@@ -14,7 +17,9 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import random
+import statistics
 from pathlib import Path
 
 SSQ_ITEMS = ["GD", "FA", "HE", "ES", "DF", "IS", "SW", "NA", "CO", "FH", "BV", "DO", "DC", "VE", "SA", "BU"]
@@ -38,7 +43,11 @@ HEADERS = {
                             "depth_quality", "visual_comfort", "artifact_annoyance", "t_utc"],
     "part2.csv": ["participant_id", "block", "trial_index", "clip_id", "cond_a", "cond_b", "pair_type", "different", "preference",
                   "rt_q1_s", "rt_q2_s", "view_a_s", "view_b_s", "loops_a", "loops_b", "max_dev_a_deg", "max_dev_b_deg",
-                  "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b", "skipped"],
+                  "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b", "paw_theta_deg", "skipped"],
+    "eyerange.csv": ["participant_id", "sweep", "direction_deg", "repeat", "speed_deg_s", "onset_dev_deg", "head_onset_ecc_deg", "censored",
+                     "stopped_early", "max_head_rot_deg", "skipped"],
+    "eyerange_trace.csv": ["participant_id", "sweep", "direction_deg", "repeat", "t_s", "dot_ecc_deg", "head_yaw_deg", "head_pitch_deg",
+                           "head_rot_deg", "head_rot_along_deg"],
     "gazetraining.csv": ["participant_id", "attempt", "position", "dot_id", "dot_angle_deg", "dwell_s", "max_dev_deg",
                          "attempt_max_dev_deg", "threshold_deg", "attempt_passed"],
     "headpose.csv": ["participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg"],
@@ -49,6 +58,115 @@ HEADERS = {
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
+
+
+def angle_from_reference(yaw: float, pitch: float) -> float:
+    y, p = math.radians(yaw), math.radians(pitch)
+    return math.degrees(math.acos(max(-1.0, min(1.0, math.cos(p) * math.cos(y)))))
+
+
+def unit(yaw: float, pitch: float) -> tuple[float, float, float]:
+    y, p = math.radians(yaw), math.radians(pitch)
+    return math.cos(p) * math.sin(y), math.sin(p), math.cos(p) * math.cos(y)
+
+
+def great_circle(yaw0: float, pitch0: float, yaw1: float, pitch1: float) -> float:
+    (x0, y0, z0), (x1, y1, z1) = unit(yaw0, pitch0), unit(yaw1, pitch1)
+    cross = math.sqrt((y0 * z1 - z0 * y1) ** 2 + (z0 * x1 - x0 * z1) ** 2 + (x0 * y1 - y0 * x1) ** 2)
+    return math.degrees(math.atan2(cross, x0 * x1 + y0 * y1 + z0 * z1))
+
+
+def rotation_along(yaw0: float, pitch0: float, yaw1: float, pitch1: float, direction: float) -> float:
+    """As StudySchema.RotationAlongDirection: rotation from direction 0 to 1 projected on the target direction."""
+    rot = great_circle(yaw0, pitch0, yaw1, pitch1)
+    if rot < 1e-9:
+        return 0.0
+    ox, oy, oz = unit(yaw0, pitch0)
+    tx, ty, tz = unit(yaw1, pitch1)
+    rn = math.hypot(oz, ox) or 1.0
+    rx, rz = oz / rn, -ox / rn
+    ux, uy, uz = oy * rz, oz * rx - ox * rz, -oy * rx
+    az = math.atan2(tx * rx + tz * rz, tx * ux + ty * uy + tz * uz)
+    return rot * math.cos(az - math.radians(direction))
+
+
+def simulate_eye_range(plan: dict, pid: str, rng: random.Random, skip: bool) -> tuple[list[list], list[list], dict]:
+    """eyerange.csv rows, eyerange_trace.csv rows and the session.json block for continuous sweeps (user 11-20).
+    Arbitrary generator: the head is left slightly off the reference after the alignment and starts to follow the
+    dot once it passes a per-participant eccentricity; the summary and the rule repeat the study program on the
+    rounded trace values (head_rot_deg above the threshold, median over the sweeps, censored = max eccentricity)."""
+    er = plan.get("eye_range")
+    if not er:
+        return [], [], {}
+    speed, emax, thr = float(er["speed_deg_s"]), float(er["max_eccentricity_deg"]), float(er["head_threshold_deg"])
+    limit = rng.choice([12.0, 18.0, 22.0, 28.0, 34.0, 60.0])
+    gain = rng.uniform(0.3, 0.7)
+    rows, trace, results = [], [], []
+    n_frames = int(round(emax / speed * 30.0))
+    for k, s in enumerate(er["sweeps"]):
+        d = float(s["direction_deg"])
+        if skip and k >= len(er["sweeps"]) // 3:
+            rows.append([pid, s["index"], d, s["repeat"], speed, "", "", "", "", "", 1])
+            continue
+        y0, p0 = rng.gauss(0.0, 1.5), rng.gauss(0.0, 1.2)
+        lim = limit + rng.gauss(0.0, 2.0)
+        onset, max_rot = None, 0.0
+        for f in range(n_frames + 1):
+            t = f / 30.0
+            ecc = min(speed * t, emax)
+            m = max(0.0, ecc - lim) * gain
+            yaw = y0 + m * math.sin(math.radians(d)) + rng.gauss(0.0, 0.1)
+            pitch = p0 + m * math.cos(math.radians(d)) + rng.gauss(0.0, 0.1)
+            rot = round(great_circle(y0, p0, yaw, pitch), 3)
+            trace.append([pid, s["index"], d, s["repeat"], round(t, 4), round(ecc, 3), round(yaw, 3), round(pitch, 3), rot,
+                          round(rotation_along(y0, p0, yaw, pitch, d), 3)])
+            max_rot = max(max_rot, rot)
+            if onset is None and rot > thr:
+                onset = round(ecc, 3)
+                if er.get("stop_at_onset", True):
+                    break  # user 11-20: the sweep ends at the head onset
+        censored = onset is None
+        stopped = int(not censored and bool(er.get("stop_at_onset", True)))
+        rows.append([pid, s["index"], d, s["repeat"], speed, round(angle_from_reference(y0, p0), 2), "" if censored else round(onset, 2),
+                     int(censored), stopped, round(max_rot, 2), 0])
+        results.append((d, onset, censored))
+    values = [emax if c else o for _, o, c in results]
+    a = None
+    theta = float(er["default_paw_theta_deg"])
+    source = "default_skipped" if skip else "measured"
+    if not skip and values:
+        a = statistics.median(values)
+        theta = min(sorted(er["paw_theta_variants_deg"]), key=lambda v: abs(v - a))
+    per_dir = []
+    for dd in sorted(float(x) for x in er["directions_deg"]):
+        vs = [emax if c else o for x, o, c in results if x == dd]
+        med = statistics.median(vs) if vs else None
+        per_dir.append({"direction_deg": dd, "median_head_onset_ecc_deg": None if med is None else round(med, 3),
+                        "shown": shown_degrees(med, emax), "n": len(vs), "censored": sum(1 for x, _, c in results if x == dd and c)})
+    block = {"mode": "continuous", "a_deg": None if a is None else round(a, 3), "a_shown": shown_degrees(a, emax), "rule": er["rule"],
+             "measure": er["measure"], "speed_deg_s": speed, "max_eccentricity_deg": emax, "stop_at_onset": er.get("stop_at_onset", True),
+             "head_threshold_deg": thr, "rule_provisional": True, "per_direction": per_dir, "censored": sum(1 for _, _, c in results if c),
+             "stopped_early": sum(1 for _, _, c in results if not c) if er.get("stop_at_onset", True) else 0,
+             "chosen_paw_theta_deg": float(theta), "paw_theta_source": source, "skipped": skip, "enabled": True,
+             "default_paw_theta_deg": er["default_paw_theta_deg"], "paw_theta_variants_deg": er["paw_theta_variants_deg"],
+             "n_sweeps": len(er["sweeps"]), "n_answered": len(results)}
+    if not skip:
+        block.update({"result_shown_utc": "2026-11-20T00:00:00.000Z", "result_confirm_utc": "2026-11-20T00:00:08.000Z",
+                      "result_time_on_page_s": round(rng.uniform(4.0, 15.0), 2)})
+    return rows, trace, block
+
+
+def shown_degrees(value, emax: float) -> str:
+    """As EyeRangeShapes.ShownDegrees: whole degrees, ">=max" for censored, a dash without data."""
+    if value is None:
+        return "—"
+    if value >= emax - 1e-3:
+        return f"≥{emax:g}°"
+    return f"{int(math.floor(value + 0.5))}°"
+
+
+def resolve_theta(name: str, theta: float) -> str:
+    return name.replace("{paw_theta}", f"{float(theta):g}")
 
 
 def write_csv(path: Path, header: list[str], rows: list[list]) -> None:
@@ -70,14 +188,18 @@ def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, inc
         attempts.append(dots)
         if max(dots) <= thr:
             break
+    er_rows, er_trace, er_block = simulate_eye_range(plan, pid, rng, skip=qa_skips)
+    theta = er_block.get("chosen_paw_theta_deg", 15.0)
     session = {"participant_id": pid, "simulated": True, "mode": "formal", "language": rng.choice(["zh", "en"]),
                "plan_seed": plan["seed"], "config_sha256": plan["config_sha256"], "plan_format_version": plan["plan_format_version"],
-               "data_contract_version": 3, "status": "aborted" if incomplete else "complete",
+               "data_contract_version": 6, "status": "aborted" if incomplete else "complete",
                "abort_reason": "simulated abort" if incomplete else "", "app_version": "simulator",
                "stereotest_arcsec_per_px": GEN["arcsec_per_px"], "stereotest_px_source": "config_fallback",
                "break_s": round(rng.uniform(120.0, 260.0), 1),
                "gaze_training": {"attempts": len(attempts), "passed": max(attempts[-1]) <= thr,
                                  "max_dev_deg_per_attempt": [max(x) for x in attempts]}}
+    if er_block:
+        session["eye_range"] = er_block
     (d / "session.json").write_text(json.dumps(session, indent=2), encoding="utf-8")
     checkin = {"participant_id": pid, "verbal_reminder_given": True}
     checkin["pre_session_confirmed" if old_checkin else "paper_forms_confirmed"] = True
@@ -90,6 +212,8 @@ def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, inc
             gz_rows.append([pid, a, pos, k, round(360.0 * k / len(dots), 1), gaze.get("dwell_s", 2.0), dots[pos],
                             max(dots), thr, int(max(dots) <= thr)])
     write_csv(d / "gazetraining.csv", HEADERS["gazetraining.csv"], gz_rows)
+    write_csv(d / "eyerange.csv", HEADERS["eyerange.csv"], er_rows)
+    write_csv(d / "eyerange_trace.csv", HEADERS["eyerange_trace.csv"], er_trace)
 
     parts = {pp["part"]: pp["trials"] for pp in plan["parts"]}
     st_rows = []
@@ -154,12 +278,12 @@ def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, inc
                 m = max(m, (yaw ** 2 + pitch ** 2) ** 0.5)
                 hp_rows.append([pid, 2, t["index"], seg, round(k / 30.0, 3), k, yaw, pitch, round(rng.gauss(0, 1.0), 2)])
             seg_max[seg] = round(m, 2)
-            pb_rows.append([pid, 2, t["index"], seg, t["file_a"] if seg == "A" else t["file_b"], 300, 300,
+            pb_rows.append([pid, 2, t["index"], seg, resolve_theta(t["file_a"] if seg == "A" else t["file_b"], theta), 300, 300,
                             rng.choice([0, 0, 0, 2]), 33.3, 34.5])
         p2_rows.append([pid, t["block"], t["index"], t["clip_id"], t["cond_a"], t["cond_b"], t["pair_type"],
                         int(diff), pref, round(rng.uniform(0.8, 3.0), 2), round(rng.uniform(1.0, 4.0), 2) if diff else "",
                         view_a, view_b, int(view_a // 10), int(view_b // 10), seg_max["A"], seg_max["B"],
-                        round(rng.uniform(1.0, 4.0), 2), round(rng.uniform(0.5, 4.9), 2), 0, 0, 0, 0, int(qa_skips and ti == 2)])
+                        round(rng.uniform(1.0, 4.0), 2), round(rng.uniform(0.5, 4.9), 2), 0, 0, 0, 0, theta, int(qa_skips and ti == 2)])
     write_csv(d / "part1.csv", HEADERS["part1.csv"], p1_rows)
     write_csv(d / "part1_revisions.csv", HEADERS["part1_revisions.csv"], rev_rows)
     write_csv(d / "part1_replays.csv", HEADERS["part1_replays.csv"], rep_rows)

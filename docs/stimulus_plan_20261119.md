@@ -18,6 +18,8 @@
 | D9 | 第一部分说明页加“画面本身在移动时，建议少做主动转头探索，以免头晕” |
 | D10 | PAIR360 1stDormitory_Seq1 只有 250 帧，就用它的全部长度（用户 11-19） |
 | D11 | 真实数据（HELVIPAD、PAIR360）原生 10 Hz（HELVIPAD arXiv 2411.18335 附录 A.1 与图 11；PAIR360 RA-L 2024 第 III-C 节），不采用按 25 fps 加速 2.5 倍播放；在“插帧到 25 fps”和“原生 10 fps 播放”之间选，先做插帧样片看效果（用户 11-19）。若插帧：插值作用在输入帧上，四种方法都基于插值后的输入生成，12 s 实际时长 = 120 个原生帧 → 300 帧；若原生：120 帧 10 fps。两种方式下 DS、MP 都需要按新的 120 帧窗口重跑或截取 |
+| D12 | HELVIPAD 的 DeepSynthesis 改用正确的深度尺度 raw/256 重新标定并重跑（用户 11-20）；MotionParallax 输入的 uint16 回绕影响极小，不重跑、沿用现有输入（用户 11-20） |
+| D13 | 第二部分 PAw 的修正半径按被试选择（用户 11-20，方案 A）：注视练习前的自然注视范围测量（同日改为连续向外扫动：圆点从中央沿 8 个方向各 2 次匀速向外移动，a = 头部开始转动时圆点偏心度的中位数）得到被试的 a，程序从 θmax ∈ {10, 15, 20, 25, 30}° 中取最接近 a 的一个（超出范围取端点，如 a = 40° → 30°；步骤关闭或跳过时 15°，论文默认值），衰减带 5° 不变。因此第二部分每个片段（near_A–F 与练习 train_near，共 7 段）都要渲染 1 个 PA 与 5 个 PAw 变体，文件名 `<clip_id>__pa.mp4` 与 `<clip_id>__paw_t<θ>.mp4`（如 `near_A__paw_t20.mp4`）；程序与清单见 `docs/walkthrough_issues_20261119.md` 第 52–58 条 |
 
 ## 1. 统一规格
 
@@ -50,16 +52,16 @@
 |---|---|---|---|
 | S1 | Replica_gen 新生成 4 条（habitat 环境，沿用 run_0007/0009 的生成参数，4K 直接渲染） | 173 GPU 0–3 | 待首条实测 |
 | S2 | Mono：源帧 → 4K（PAIR360 用 INTER_AREA 缩到 5768×2884，与 4KDOWN 一致；HELVIPAD 用 `v360` 放大）→ 上下复制 → 编码 | 173 | 每段几分钟 |
-| S3 | Ours PA：第一部分 10 段 + train_indoor；Ours PA 与 PAw：第二部分 7 段 × 2；离线入口，代码 `e58279d`（worktree `/mnt/nvme1/Pano2stereo_wt_prealloc`），DA²；HELVIPAD 在原生 1932×966 渲染后放大 | 173 GPU 0–3 | 共 25 次渲染，每次待实测 |
+| S3 | Ours PA：第一部分 10 段 + train_indoor；Ours 第二部分 7 段 × （PA + PAw θmax 10、15、20、25、30°，衰减带 5°）= 42 段（D13）；离线入口，代码 `e58279d`（worktree `/mnt/nvme1/Pano2stereo_wt_prealloc`），DA²；HELVIPAD 在原生 1932×966 渲染后放大 | 173 GPU 0–3 | 共 11 + 42 = 53 次渲染（D13 之前为 25 次），每次待实测；PAw 的 θmax 参数名与取值待在离线入口中核实 |
 | S4 | DS 补跑：HELVIPAD 2 条（`deepomnistereo_bl`，先拟合深度标定） | 173 | 每条待实测 |
 | S5 | MP 补跑：173 打包输入 → **本机 MATLAB R2026b** 跑官方预处理 → 回传 173 渲染 ERP（`mp_ods_render.py`，1932×966） | 本机 + 173 | REC_12_IN 实测：主阶段 2 h 42 min + 其余 5 min，每条约 3 h，占满本机 8 核 |
 | S6 | DS、MP（全部第一部分片段）：已有或补跑的输出 → `v360` 放大到 5768×2884 → 上下拼接 → 编码 | 173 | 每段几分钟 |
 | S7 | 校验：分辨率、帧数、眼序抽查、每段首帧/中间帧/末帧拼图给用户看；生成刺激清单（文件名、来源、命令、参数、sha256） | 173 + 本机 | |
-| S8 | 传回本机 `Stimuli/`（正式刺激约 60–70 MB/段，共约 45 段，约 3 GB） | | |
+| S8 | 传回本机 `Stimuli/`（正式刺激约 60–70 MB/段；D13 后共约 73 段，约 5 GB） | | |
 
 顺序：S2、S6（已有输出部分）、S3 可以马上排进队列（与 E–H 共用 GPU 0–3，离线渲染不计时，不影响 E–H 结果）；S1 生成后再做第二部分剩余的 S3；S4、S5 与之并行；S5 的本机 MATLAB 安排在不做 VR 测试的时段（如夜间）。
 
-磁盘：Ours 4K 每次渲染只保留修补后的两眼 PNG（约 12 GB/次，按 5768×2884 PNG 约 20 MB 估计），25 次约 300 GB，放 `/mnt/disk4`（剩余 626 GB）或 disk1–3；中间 PNG 在刺激核对完成前保留，删除前另行请用户确认。
+磁盘：Ours 4K 每次渲染只保留修补后的两眼 PNG（约 12 GB/次，按 5768×2884 PNG 约 20 MB 估计），D13 后 53 次约 640 GB，超过 `/mnt/disk4` 的剩余 626 GB。用户 11-20：中间 PNG 可分散放在 173 的 disk1–4 与 nvme1 上；所有中间产物在刺激核对完成后的最后阶段统一清理，删除前列出确切路径请用户批准；中间 PNG 在刺激核对完成前保留，删除前另行请用户确认。
 
 ## 4. 待确认
 
@@ -90,3 +92,23 @@
 - B：原生 10 fps，120 帧，12.0 s，43 Mb/s，sha256 `33d22330d6bd102087917295dfacce1abd67b4e4642a878c480f0bef7d44a952`。
 - C：FFmpeg `minterpolate`（`mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1:scd=none`）插到 25 fps，插值前左右各补 192 px 循环边界、插值后裁回，296 帧，11.84 s，73 Mb/s，sha256 `840476ee8ab30e7a8cfd165c7a11456ccb5c35a0b04b16b664fa93f3f39836ca`。
 - 本机：`Stimuli/_decode_test/`；C 复制为 `Stimuli/dummy_indoor__ours.mp4`，B 复制为 `Stimuli/dummy_indoor__mono.mp4`（P01 第一部分第 1 组的第 1 段与第 4 段；中间两段为 DS、MP 占位），原测试片备份在 `_decode_test/orig_testclip_dummy_indoor__*.mp4`。
+
+## 8. 真实片段窗口（用户 11-19：按转向最少的 12 s；停车段与有运动两种都准备，11-20 看后再定）
+
+转向用 `tools/stimuli/yaw_windows.py`（相位相关估计偏航，1 s 平滑，窗口内累计转角）；“有运动”用 `yaw_windows_moving.py`（1 s 画面变化中位数 ≥ 序列中位数的 70%）。结果：173 `/mnt/disk4/Pano2stereo_r1/E5_stimuli/windows/`。原生 10 Hz，每窗 120 帧；起始帧为排序后文件序号（0 起）。
+
+| 片段 | 序列 | 窗口（转向最少） | 有运动窗口 |
+| --- | --- | --- | --- |
+| rin（REC_12_IN） | HELVIPAD val 20240124_REC_12_IN | 250（25°，运动正常） | 同左 |
+| rin（REC_06_IN） | HELVIPAD test 20240120_REC_06_IN | 300（15°） | 同左 |
+| rin（REC_01_IN） | HELVIPAD test 20240127_REC_01_IN | 510（17°） | 同左 |
+| rout（1stDorm） | PAIR360 1stDormitory_Seq1 | 120（15°） | 同左 |
+| rout（CoE） | PAIR360 CollegeofEngineering_Seq0 | 1550（3°，画面变化 27%，停车段） | 1790（15°，82%） |
+| rout（Parking） | PAIR360 ParkingLotPeaceAmphitheater_Seq1 | 1110（15°，60%） | 3440（17°，78%） |
+| train_outdoor（PhysEd，只需 mono） | PAIR360 CollegeofPhysicalEducation_Seq0 | 70（0.5°，16%） | 280（35°，70%） |
+
+对比片（mono，原生 10 fps，120 帧，7680→5768 area 缩放，上下排列 HEVC，90–118 Mb/s）：173 `E5_stimuli/window_test/`（`SHA256SUMS`）；本机放在第一部分第 4 组 rout_B（P01 播放顺序）：第 1 段 `rout_B__motionparallax` = CoE 停车段，第 2 段 `rout_B__mono` = CoE 有运动，第 3 段 `rout_B__ours` = Parking 偏慢段，第 4 段 `rout_B__deepsynthesis` = Parking 有运动；原测试片备份在 `_decode_test/orig_testclip_rout_B__*.mp4`。
+
+## 9. 正式刺激在本机的存放（用户 11-20：全部准备好后下载到 _study 目录，按类型存好）
+
+建议结构：`Stimuli/part1/{virtual_indoor,real_indoor,real_outdoor,dummy,practice}/`、`Stimuli/part2/{near,practice}/`，文件名不变（`<clip_id>__<condition>.mp4`），根目录放 `manifest.json`（每个文件的来源序列、窗口、方法、版本、生成命令、分辨率、帧数、sha256）；清单配置的 `file_pattern` 改为带子目录（重新生成清单，只改 `file` 字段）；测试片与样片移到 `Stimuli/_samples/`。

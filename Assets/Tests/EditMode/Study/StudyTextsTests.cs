@@ -150,5 +150,38 @@ namespace Pano2StereoVR.Study.Tests
                 Assert.IsFalse(StudyTexts.En(k).ToLowerInvariant().Contains("saved"), k + " mentions saving");
             }
         }
+
+        [Test]
+        public void EyeRangeTextsDoNotAskToKeepTheHeadStill()
+        {
+            // user 11-20: the measurement comes before the gaze practice; its texts ask for natural viewing only
+            LoadTable();
+            // the result page (after the measurement) may mention the head; the instructions before it may not
+            string[] keys = { "eyerange_title", "eyerange_intro", "eyerange_cue" };
+            foreach (string k in keys)
+            {
+                Assert.IsTrue(StudyTexts.Has(k), "missing " + k);
+                string zh = StudyTexts.Zh(k);
+                string en = StudyTexts.En(k).ToLowerInvariant();
+                foreach (string w in new[] { "头部", "不动", "只转动", "转头" })
+                {
+                    Assert.IsFalse(zh.Contains(w), k + " (zh) mentions " + w);
+                }
+                foreach (string w in new[] { "head", "still", "only your eyes", "eyes only" })
+                {
+                    Assert.IsFalse(en.Contains(w), k + " (en) mentions " + w);
+                }
+            }
+            StudyTexts.Language = StudyTexts.Chinese;
+            Assert.AreEqual("自然注视范围测量", StudyTexts.Get("eyerange_title"));
+            StringAssert.Contains("自然地用目光跟随圆点", StudyTexts.Get("eyerange_intro"));
+            StringAssert.Contains("16", StudyTexts.Format("eyerange_intro", 16));
+            Assert.AreEqual("不转头时，你的眼睛大约能看到 **23°** 的范围", StudyTexts.Format("eyerange_result_line", "23°"));
+            Assert.AreEqual("下一步", StudyTexts.Get("next"));
+            StudyTexts.Language = StudyTexts.English;
+            Assert.AreEqual("Next", StudyTexts.Get("next"));
+            StringAssert.Contains("≥40°", StudyTexts.Format("eyerange_result_line", "≥40°"));
+            StudyTexts.Language = StudyTexts.Chinese;
+        }
     }
 }

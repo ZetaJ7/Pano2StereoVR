@@ -14,6 +14,7 @@
     "break",
     "ssq:S_mid2",
     "hmd_fit",
+    "eyerange",
     "gazetraining",
     "part:2",
     "ssq:S_post",
@@ -25,6 +26,41 @@
     "tolerance_deg": 5.0,
     "dwell_s": 1.0,
     "note": "第二部分每个试次与注视练习开始前：头部在参考方向 tolerance_deg 内连续保持 dwell_s 秒后自动开始。tolerance_deg 5° 为用户 11-19 暂定，实测后再调整；dwell_s 1.0 s 为用户 11-19 决定"
+  },
+  "eye_range": {
+    "enabled": true,
+    "mode": "continuous",
+    "directions_deg": [
+      0,
+      45,
+      90,
+      135,
+      180,
+      225,
+      270,
+      315
+    ],
+    "repeats": 2,
+    "speed_deg_s": 8.0,
+    "max_eccentricity_deg": 40.0,
+    "head_threshold_deg": 3.0,
+    "stop_at_onset": true,
+    "rule": "median_onset_ecc",
+    "measure": "head_rot_deg",
+    "paw_theta_variants_deg": [
+      10,
+      15,
+      20,
+      25,
+      30
+    ],
+    "default_paw_theta_deg": 15.0,
+    "dot_size_deg": 1.5,
+    "align_dwell_s": 0.5,
+    "gap_s": 0.3,
+    "reference_yaw_deg": 0.0,
+    "reference_pitch_deg": 0.0,
+    "note": "自然注视范围测量（用户 11-20；同日改为连续向外扫动，方案 A：自然观看是连续的搜索）：注视练习之前，每次先面向中央十字（对准范围同 alignment.tolerance_deg，保持 align_dwell_s），十字消失后一个彩色圆点从十字处出发，沿一个方向（0° = 上、顺时针，与注视练习的圆点一致）以 speed_deg_s 匀速向外移动到 max_eccentricity_deg 后消失，间隔 gap_s；被试像平时一样自然地用目光跟随圆点，不需按键。每个方向 repeats 次，顺序按被试随机。逐帧记录头部相对扫动开始时朝向的大圆角转动 head_rot_deg；头部转动首次超过 head_threshold_deg 时圆点所在的偏心度为该次扫动的 head_onset_ecc_deg，stop_at_onset 为 true 时该次扫动随即结束、圆点消失（用户 11-20）；到最大偏心度仍未超过则删失。16 次扫动后显示结果页（各方向的范围与 a），被试按“下一步”继续。a 的规则（median_onset_ecc）：全部扫动 head_onset_ecc_deg 的中位数，删失按 max_eccentricity_deg 计。PAw 半径取 paw_theta_variants_deg 中最接近 a 的一个（超出范围取端点）；步骤关闭、不在流程中或被跳过时用 default_paw_theta_deg（15°，论文默认）并记入日志。"
   },
   "timing": {
     "clip_s": 10.0,
@@ -175,6 +211,10 @@
       "pa",
       "paw"
     ],
+    "file_patterns": {
+      "paw": "{clip_id}__paw_t{paw_theta}.mp4",
+      "note": "第二部分 PAw 文件按修正半径分变体（用户 11-20，方案 A）：{paw_theta} 在清单中保留为占位符，程序在自然注视范围测量后按被试选定的 θ 替换（如 near_A__paw_t20.mp4）；PA 文件名不变。签到时检查全部变体是否存在"
+    },
     "same_pairs_per_clip": 1,
     "clips": [
       {
@@ -260,6 +300,11 @@
     "stereo pass criterion": "立体视通过标准不在程序中；分析程序 analysis_config.stereo_pass_rule 默认未设定，只报告",
     "part1.dummy": "dummy 由 2 个片段 × 2 条件改为 1 个片段 × 4 条件（一组，排在正式组之前）",
     "alignment.tolerance_deg": "用户 11-19 暂定 5°，实测后再调整（不是待确认项，列在这里便于复查）",
-    "break": "休息至少 min_break_s（120 s）后由被试自选开始"
+    "break": "休息至少 min_break_s（120 s）后由被试自选开始",
+    "eye_range.mode": "用户 11-20 决定：连续向外扫动（方案 A），离散圆点方式已删除",
+    "eye_range.head_threshold_deg": "暂定 3.0°，预实验后再定（用户 11-20）；a 的规则（median_onset_ecc：head_onset_ecc_deg 的中位数，删失按最大偏心度计）同为暂定，逐帧原始数据保留在 eyerange_trace.csv，规则可事后更改",
+    "eye_range.speed_deg_s / max_eccentricity_deg / repeats": "8°/s、最大 40°、每方向 2 次（共 16 次，每次 5 s）：预实验后按实测调整",
+    "eye_range.dot_size_deg / align_dwell_s / gap_s / 距离相同取较小 θ": "圆点 1.5°、对准保持 0.5 s、两次扫动间灰屏 0.3 s、与 a 距离相同时取较小的 θ：预实验后按实测调整",
+    "eye_range.stop_at_onset": "用户 11-20 决定：头部起动判据满足时立即结束该次扫动（圆点消失）；删失的扫动照常移到最大偏心度"
   }
 }

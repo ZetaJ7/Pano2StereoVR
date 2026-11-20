@@ -17,7 +17,10 @@ namespace Pano2StereoVR.Study
     /// (S_pre, S_mid1, S_mid2, S_post) and the post-questionnaire, waits out the break and presses "ready",
     /// presses the headset buttons (stereo test incl. "can't tell", Part 2 Q1/Q2, Part 1 scales), simulates the
     /// head for the orientation alignment (first off the reference, then on it until the dwell completes),
-    /// advances self-paced clips (same path as the trigger), replays and re-rates one clip once in the first
+    /// lets the simulated head follow each natural-viewing-range sweep from 20 deg dot eccentricity on (three times
+    /// the dot's further travel, never past the dot), so the head passes 3 deg at about 21 deg (the sweep stops there)
+    /// and the provisional rule gives a of about 21 and the PAw radius 20, presses "Next" on the eye-range result
+    /// page (like any headset button), advances self-paced clips (same path as the trigger), replays and re-rates one clip once in the first
     /// Part 1 group summary, uses the QA "next group" control once (last Part 1 group), and screenshots every
     /// new screen, the alignment cross, the gaze-training dots, the gray gap and the left/right preview eye of
     /// the first clips of each part. On the end page it opens and cancels
@@ -271,6 +274,31 @@ namespace Pano2StereoVR.Study
                     continue;
                 }
 
+                // natural viewing range: the simulated head follows the sweeping dot from 20 deg on (deterministic a, theta 20)
+                if (_ctrl.EyeRangeSweepActive)
+                {
+                    bool shot = false;
+                    while (_ctrl.EyeRangeSweepActive)
+                    {
+                        float dot = _ctrl.EyeRangeDotEccentricityDeg;
+                        _ctrl.DesktopLookAlongEyeRangeSweep(EyeRangeHeadEccentricity(dot));
+                        if (!shot && dot > 15f && CountFor("eyerange") < 2)
+                        {
+                            shot = true;
+                            Bump("eyerange");
+                            yield return Shot("eyerange_sweep_" + CountFor("eyerange"));
+                            continue;
+                        }
+                        yield return null;
+                    }
+                    Log("eyerange sweep done (head followed from 20 deg)");
+                    continue;
+                }
+                if (step.StartsWith("Part:2", StringComparison.Ordinal) && Remember("paw_theta"))
+                {
+                    Log("Part 2 PAw correction radius " + _ctrl.PawThetaDeg.ToString("0.##", CultureInfo.InvariantCulture) + " deg");
+                }
+
                 // QA skip control: once, at the first clip of the last Part 1 group
                 if (!_skipDone && step.StartsWith("Part:1", StringComparison.Ordinal) && IsLastGroupFirstClip(_ctrl.CurrentTrial)
                     && _ctrl.ClipVisible && _ui.SkipGroupButton != null && _ui.SkipGroupButton.gameObject.activeInHierarchy)
@@ -442,6 +470,12 @@ namespace Pano2StereoVR.Study
                 Log("desktop: submit not yet enabled (timer or answers)");
                 yield return Shot("desktop_" + step + "_waiting");
             }
+        }
+
+        /// <summary>Simulated head eccentricity for a dot eccentricity: still up to 20 deg, then 3 deg per degree of dot travel, at most the dot.</summary>
+        private static float EyeRangeHeadEccentricity(float dotEccDeg)
+        {
+            return Mathf.Min(dotEccDeg, Mathf.Max(0f, (dotEccDeg - 20f) * 3f));
         }
 
         /// <summary>Trial label "group k/N clip 1/..." with k == N.</summary>

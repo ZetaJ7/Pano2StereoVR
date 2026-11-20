@@ -10,7 +10,8 @@ using UnityEngine.XR;
 namespace Pano2StereoVR.Study
 {
     /// <summary>
-    /// Flow steps of the study session (SSQ, break, headset fitting, stereo test, gaze training, Parts 1 and 2).
+    /// Flow steps of the study session (SSQ, break, headset fitting, stereo test, natural viewing range, gaze
+    /// training, Parts 1 and 2).
     /// Every wait loop also ends on a QA skip request (<see cref="Interrupted"/>); skipped trials are written
     /// with skipped = 1.
     /// </summary>
@@ -326,11 +327,14 @@ namespace Pano2StereoVR.Study
         /// <summary>
         /// Yellow cross at the reference direction with a dwell ring. Ends when the head has stayed within the
         /// plan's alignment tolerance for its dwell time (no trigger needed), or on a QA skip.
-        /// result(alignment time in s, deviation at the start in deg).
+        /// result(alignment time in s, deviation at the start in deg). dwellSeconds below 0 = the plan's dwell;
+        /// showDeviation false hides the "off by x deg / hold still" line (natural viewing range, user 11-20).
         /// </summary>
-        private IEnumerator AlignToReference(float refYaw, float refPitch, string cueText, float panelDrop, Action<float, float> result)
+        private IEnumerator AlignToReference(float refYaw, float refPitch, string cueText, float panelDrop, Action<float, float> result,
+            float dwellSeconds = -1f, bool showDeviation = true)
         {
             AlignmentPlan a = _s.Plan.Alignment;
+            float dwell = dwellSeconds >= 0f ? dwellSeconds : a.DwellSeconds;
             Quaternion refRot = Quaternion.Euler(-refPitch, refYaw, 0f);
             ShowCue(refRot * Vector3.forward);
             _alignRing.SetActive(true);
@@ -339,7 +343,7 @@ namespace Pano2StereoVR.Study
             _ui.SetHmdSize(1500, 270);
             _ui.PlaceHmdCanvas(_rig.HeadPosition, Quaternion.Euler(0f, refYaw, 0f) * Vector3.forward, PanelDistance, panelDrop);
             _ui.Body(_ui.HmdContent, cueText, TextAnchor.MiddleCenter);
-            Text devText = _ui.Secondary(_ui.HmdContent, "", TextAnchor.MiddleCenter, 34);
+            Text devText = showDeviation ? _ui.Secondary(_ui.HmdContent, "", TextAnchor.MiddleCenter, 34) : null;
             _aligning = true;
             _alignYaw = refYaw;
             _alignPitch = refPitch;
@@ -359,10 +363,13 @@ namespace Pano2StereoVR.Study
                 {
                     insideSince = now;
                 }
-                float progress = !inside ? 0f : (a.DwellSeconds <= 0f ? 1f : (now - insideSince) / a.DwellSeconds);
+                float progress = !inside ? 0f : (dwell <= 0f ? 1f : (now - insideSince) / dwell);
                 SetAlignFeedback(inside, progress);
-                string devLine = TF("align_deviation", dev.ToString("0.0", CultureInfo.InvariantCulture));
-                devText.text = inside ? StudyTheme.Tint(devLine + "      " + T("align_hold"), StudyTheme.Dark.Success, true) : devLine;
+                if (devText != null)
+                {
+                    string devLine = TF("align_deviation", dev.ToString("0.0", CultureInfo.InvariantCulture));
+                    devText.text = inside ? StudyTheme.Tint(devLine + "      " + T("align_hold"), StudyTheme.Dark.Success, true) : devLine;
+                }
                 if (inside && progress >= 1f)
                 {
                     break;
@@ -375,6 +382,458 @@ namespace Pano2StereoVR.Study
             _cueMarker.SetActive(false);
             _ui.ShowHmd(false);
             result(Time.realtimeSinceStartup - t0, dev);
+        }
+
+        // ------------------------------------------------------------------ natural viewing range (before the gaze training)
+        private void BuildEyeTarget(EyeRangePlan er)
+        {
+            if (_eyeTarget != null)
+            {
+                Destroy(_eyeTarget);
+            }
+            _eyeTarget = Track(GameObject.CreatePrimitive(PrimitiveType.Sphere));
+            Destroy(_eyeTarget.GetComponent<Collider>());
+            _eyeTarget.name = "EyeRangeTarget";
+            _eyeTarget.transform.localScale = Vector3.one * 2f * PanelDistance * Mathf.Tan(0.5f * er.DotSizeDeg * Mathf.Deg2Rad);
+            if (_eyeTargetMat == null)
+            {
+                _eyeTargetMat = Track(new Material(ColorShader));
+            }
+            _eyeTarget.GetComponent<Renderer>().sharedMaterial = _eyeTargetMat;
+            _eyeTarget.SetActive(false);
+        }
+
+        /// <summary>The coloured dot at eccentricity eccDeg along directionDeg (0 deg = top, clockwise, as the gaze-training ring).</summary>
+        private void ShowEyeTarget(EyeRangePlan er, float directionDeg, float eccDeg)
+        {
+            Vector3 dir = EyeRangeDirection(er.ReferenceYawDeg, er.ReferencePitchDeg, directionDeg, eccDeg);
+            _eyeTarget.transform.position = _rig.HeadPosition + dir * PanelDistance;
+            if (!_eyeTarget.activeSelf)
+            {
+                Color[] palette = StudyTheme.GazeDotColors;
+                int k = Math.Max(0, er.DirectionsDeg.IndexOf(directionDeg));
+                _eyeTargetMat.SetColor("_Color", palette[k % palette.Length]);
+                _eyeTarget.SetActive(true);
+            }
+            _eyeRefYaw = er.ReferenceYawDeg;
+            _eyeRefPitch = er.ReferencePitchDeg;
+            _eyeDirDeg = directionDeg;
+            _eyeDotEccDeg = eccDeg;
+        }
+
+        private void HideEyeTarget()
+        {
+            if (_eyeTarget != null)
+            {
+                _eyeTarget.SetActive(false);
+            }
+        }
+
+        /// <summary>
+        /// Natural viewing range measurement (user decisions 11-20), before the gaze practice, so the participant has not
+        /// been told to keep the head still, and its texts do not mention it. Continuous outward sweeps (option A, user
+        /// 11-20: natural viewing is a continuous search). Per sweep: the head is aligned to the central cross (alignment
+        /// tolerance, the step's short dwell, no deviation text), the cross disappears, and a dot starts at the cross and
+        /// moves outward along the sweep direction at a constant angular speed up to the maximum eccentricity, then
+        /// disappears; no button press is needed. Every displayed frame goes to eyerange_trace.csv (dot eccentricity,
+        /// head yaw and pitch relative to the reference, head rotation since the sweep onset and its component toward
+        /// the sweep direction); eyerange.csv gets one summary row per sweep (head onset eccentricity = dot
+        /// eccentricity when the rotation first exceeds the threshold, or censored). Both are written at the end of
+        /// each sweep. Manual Recenter is locked from the first alignment to the last sweep. A QA skip writes the
+        /// remaining sweeps with skipped = 1 (a sweep stopped midway keeps its frames). The provisional rule then gives
+        /// a and the PAw correction radius for Part 2; when the step is disabled or skipped, the plan default (15 deg)
+        /// is used and logged.
+        /// </summary>
+        private IEnumerator EyeRangeStep()
+        {
+            EyeRangePlan er = _s.Plan.EyeRange;
+            if (!er.Enabled || er.Sweeps.Count == 0)
+            {
+                LogEvent("eyerange_skipped", "disabled in plan");
+                FinishEyeRange("default_disabled");
+                yield break;
+            }
+            ShowGray();
+            bool go = false;
+            yield return ShowHmdPanelText(T("eyerange_title"), TF("eyerange_intro", er.Sweeps.Count), "start", () => go = true, () => go);
+            Recenter();
+            BuildEyeTarget(er);
+            string pid = _s.Plan.ParticipantId;
+            _recenterLocked = true; // user 11-20: as in the gaze training, no manual recenter while the head is measured
+            for (int i = 0; i < er.Sweeps.Count; i++)
+            {
+                EyeRangeSweep sw = er.Sweeps[i];
+                var res = new EyeRangeSweepResult
+                {
+                    Sweep = sw.Index, DirectionDeg = sw.DirectionDeg, Repeat = sw.Repeat, SpeedDegPerSecond = er.SpeedDegPerSecond, Skipped = true,
+                };
+                var trace = new List<object[]>();
+                float alignS = 0f, startDev = 0f;
+                if (!Interrupted)
+                {
+                    _s.TrialLabel = (i + 1) + "/" + er.Sweeps.Count + " dir " + sw.DirectionDeg.ToString("0", CultureInfo.InvariantCulture)
+                        + " rep " + (sw.Repeat + 1);
+                    yield return AlignToReference(er.ReferenceYawDeg, er.ReferencePitchDeg, T("eyerange_cue"), -0.42f,
+                        (t, dv) => { alignS = t; startDev = dv; }, er.AlignDwellSeconds, false);
+                }
+                if (!Interrupted)
+                {
+                    _rig.HeadAngles(out float y0, out float p0, out _);
+                    float onsetYaw = StudyRig.WrapDegrees(y0 - er.ReferenceYawDeg);
+                    float onsetPitch = p0 - er.ReferencePitchDeg;
+                    res.OnsetDevDeg = (float)StudySchema.AngleFromReference(onsetYaw, onsetPitch);
+                    var eccs = new List<float>();
+                    var rots = new List<float>();
+                    float t0 = Time.realtimeSinceStartup;
+                    _eyeSweeping = true;
+                    bool reachedMax = false; // the sweep ended normally (at the head onset or at the maximum)
+                    bool stoppedEarly = false;
+                    while (!Interrupted)
+                    {
+                        float ts = Time.realtimeSinceStartup - t0;
+                        float ecc = Mathf.Min(er.SpeedDegPerSecond * ts, er.MaxEccentricityDeg);
+                        ShowEyeTarget(er, sw.DirectionDeg, ecc);
+                        _rig.HeadAngles(out float yaw, out float pitch, out _);
+                        float hy = StudyRig.WrapDegrees(yaw - er.ReferenceYawDeg);
+                        float hp = pitch - er.ReferencePitchDeg;
+                        float rot = (float)StudySchema.GreatCircleDeg(onsetYaw, onsetPitch, hy, hp);
+                        float along = (float)StudySchema.RotationAlongDirection(onsetYaw, onsetPitch, hy, hp, sw.DirectionDeg);
+                        trace.Add(new object[]
+                        {
+                            pid, sw.Index, Round(sw.DirectionDeg, 1), sw.Repeat, Round(ts, 4), Round(ecc, 3), Round(hy, 3), Round(hp, 3),
+                            Round(rot, 3), Round(along, 3),
+                        });
+                        eccs.Add(ecc);
+                        rots.Add(rot);
+                        if (er.StopAtOnset && rot > er.HeadThresholdDeg)
+                        {
+                            // user 11-20: the head-onset criterion is met; the dot disappears right now
+                            reachedMax = true;
+                            stoppedEarly = true;
+                            break;
+                        }
+                        if (ecc >= er.MaxEccentricityDeg)
+                        {
+                            reachedMax = true;
+                            break;
+                        }
+                        yield return null;
+                    }
+                    _eyeSweeping = false;
+                    HideEyeTarget();
+                    if (reachedMax)
+                    {
+                        res.HeadOnsetEccDeg = EyeRangePlan.OnsetEccentricity(eccs, rots, er.HeadThresholdDeg, out bool censored);
+                        res.Censored = censored;
+                        res.StoppedEarly = stoppedEarly;
+                        res.MaxHeadRotDeg = rots.Count > 0 ? rots.Max() : 0f;
+                        res.Skipped = false;
+                    }
+                }
+                _s.EyeRangeSweeps.Add(res);
+                _s.Log.EyeRangeTrace.AppendRows(trace);
+                bool sk = res.Skipped;
+                _s.Log.EyeRange.Append(pid, res.Sweep, Round(res.DirectionDeg, 1), res.Repeat, Round(res.SpeedDegPerSecond, 3),
+                    sk ? (object)"" : Round(res.OnsetDevDeg, 2), sk || res.Censored ? (object)"" : Round(res.HeadOnsetEccDeg, 2),
+                    sk ? (object)"" : (res.Censored ? 1 : 0), sk ? (object)"" : (res.StoppedEarly ? 1 : 0),
+                    sk ? (object)"" : Round(res.MaxHeadRotDeg, 2), sk ? 1 : 0);
+                if (!sk)
+                {
+                    LogEvent("eyerange_sweep", string.Format(CultureInfo.InvariantCulture,
+                        "sweep {0} dir {1:0} rep {2}: aligned {3:0.00} s (start dev {4:0.0} deg), onset dev {5:0.00} deg, "
+                        + "head onset at {6} deg{7}, max rotation {8:0.00} deg, {9} frames", res.Sweep, res.DirectionDeg, res.Repeat + 1,
+                        alignS, startDev, res.OnsetDevDeg, res.Censored ? "censored" : res.HeadOnsetEccDeg.ToString("0.00", CultureInfo.InvariantCulture),
+                        res.StoppedEarly ? " (stopped there)" : "", res.MaxHeadRotDeg, trace.Count));
+                }
+                if (!Interrupted && i + 1 < er.Sweeps.Count)
+                {
+                    yield return Wait(er.GapSeconds);
+                }
+            }
+            _eyeSweeping = false;
+            _recenterLocked = false;
+            HideEyeTarget();
+            _s.TrialLabel = "";
+            bool skipped = _s.EyeRangeSweeps.Any(x => x.Skipped);
+            if (skipped)
+            {
+                _s.Skips++;
+                LogEvent("qa_skip", "eyerange: " + _s.EyeRangeSweeps.Count(x => x.Skipped) + " sweep(s) skipped");
+            }
+            FinishEyeRange(skipped ? "default_skipped" : "measured");
+            if (!Interrupted)
+            {
+                yield return EyeRangeResultPage(er);
+            }
+        }
+
+        // ------------------------------------------------------------------ natural viewing range: result page
+        /// <summary>
+        /// Result page (user 11-20): in the headset, mirrored on the desktop for the experimenter, a diagram of the
+        /// directions around a centre point with a radial bar at each direction's eye-only range (the median of its
+        /// sweeps, "≥40°" when censored), reference rings every 10 deg, and one line with a. The values are those
+        /// written to session.json "eye_range" (per_direction.shown, a_shown). The step ends when the participant
+        /// presses "Next" (trigger on the button, or Space); a QA skip also ends it. The display and confirmation
+        /// times go to session.json and events.csv.
+        /// </summary>
+        private IEnumerator EyeRangeResultPage(EyeRangePlan er)
+        {
+            var block = (Dictionary<string, object>)_s.Session["eye_range"];
+            var perDir = ((List<object>)block["per_direction"]).Cast<Dictionary<string, object>>()
+                .Select(m => new RangeValue
+                {
+                    DirectionDeg = (float)Convert.ToDouble(m["direction_deg"], CultureInfo.InvariantCulture),
+                    ValueDeg = m["median_head_onset_ecc_deg"] == null ? double.NaN : Convert.ToDouble(m["median_head_onset_ecc_deg"], CultureInfo.InvariantCulture),
+                    Shown = (string)m["shown"],
+                }).ToList();
+            string aShown = (string)block["a_shown"];
+            ShowGray();
+
+            // experimenter mirror on the desktop (no button: the participant ends the page)
+            _ui.ClearDesktop();
+            Transform c = _ui.DesktopContent;
+            _ui.Title(c, T("eyerange_result_title"));
+            BuildRangeDiagram(c, 520f, perDir, er.MaxEccentricityDeg);
+            _ui.Strong(c, TF("eyerange_result_line", aShown), TextAnchor.MiddleCenter);
+            _ui.Note(c, T("eyerange_result_desktop"), TextAnchor.MiddleCenter);
+
+            bool next = false;
+            _ui.ClearHmd();
+            _ui.SetHmdSize(1400, 1180);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            Transform h = _ui.HmdContent;
+            _ui.Title(h, T("eyerange_result_title"));
+            BuildRangeDiagram(h, 640f, perDir, er.MaxEccentricityDeg);
+            _ui.Strong(h, TF("eyerange_result_line", aShown), TextAnchor.MiddleCenter);
+            _ui.Note(h, T("eyerange_result_note"), TextAnchor.MiddleCenter);
+            RectTransform row = _ui.NewRow(h, 10, TextAnchor.MiddleCenter, 114);
+            _ui.HmdButton(row, T("next"), () => next = true, 380, 104, 38, ButtonKind.Primary, "Btn_Continue");
+            _ui.AddShortcut(KeyCode.Space, () => next = true);
+            _ui.AddShortcut(KeyCode.Return, () => next = true);
+
+            float t0 = Time.realtimeSinceStartup;
+            string shownUtc = UtcNow();
+            block["result_shown_utc"] = shownUtc;
+            WriteSession();
+            LogEvent("eyerange_result_shown", "a " + aShown + ", PAw theta " + StudyPlan.FormatTheta(_s.PawThetaDeg) + " deg; "
+                + string.Join(" ", perDir.Select(v => CsvLog.Format(v.DirectionDeg) + ":" + v.Shown)));
+            while (!next && !Interrupted)
+            {
+                yield return null;
+            }
+            float onPage = Time.realtimeSinceStartup - t0;
+            block["result_confirm_utc"] = next ? UtcNow() : null;
+            block["result_time_on_page_s"] = Round(onPage, 2);
+            WriteSession();
+            LogEvent(next ? "eyerange_result_confirmed" : "eyerange_result_skipped", CsvLog.Format(Round(onPage, 2)) + " s on the page");
+            _ui.ShowHmd(false);
+            _ui.ShowDesktopPanel(false);
+        }
+
+        private sealed class RangeValue
+        {
+            public float DirectionDeg;
+            public double ValueDeg;
+            public string Shown;
+        }
+
+        /// <summary>
+        /// Diagram of the eye-only range: rings and spokes (one generated texture), a radial bar and an end dot per
+        /// direction (0 deg = up, clockwise as seen by the participant), the shown value beside each bar, ring labels.
+        /// Built from plain images under a fixed-size slot of the page layout.
+        /// </summary>
+        private void BuildRangeDiagram(Transform parent, float size, List<RangeValue> values, float maxDeg)
+        {
+            StudyTheme.Palette p = _ui.PaletteFor(parent);
+            RectTransform slot = StudyUi.NewRect("RangeDiagram", parent);
+            var le = slot.gameObject.AddComponent<LayoutElement>();
+            le.minHeight = le.preferredHeight = size;
+            le.minWidth = le.preferredWidth = size;
+            float outer = 0.40f * size; // radius of the maximum eccentricity
+            List<float> rings = EyeRangeShapes.RingDegrees(maxDeg);
+
+            RectTransform ringRect = Child(slot, "Rings", Vector2.zero, new Vector2(2f * outer + 8f, 2f * outer + 8f));
+            Image ringImg = ringRect.gameObject.AddComponent<Image>();
+            ringImg.sprite = RangeRingSprite(rings.Select(r => r / maxDeg).ToList(), values.Count);
+            ringImg.color = StudyTheme.WithAlpha(p.TextMuted, 0.75f);
+            ringImg.raycastTarget = false;
+            foreach (float r in rings)
+            {
+                float rr = outer * r / maxDeg;
+                Vector2 at = Polar(rr, 22.5f) + new Vector2(18f, 6f);
+                Label(slot, r.ToString("0.#", CultureInfo.InvariantCulture) + "°", at, p.NoteSize - 2, p.TextMuted, false);
+            }
+            foreach (RangeValue v in values)
+            {
+                if (double.IsNaN(v.ValueDeg))
+                {
+                    continue;
+                }
+                float len = outer * Mathf.Clamp01((float)v.ValueDeg / maxDeg);
+                RectTransform bar = Child(slot, "Bar", Vector2.zero, new Vector2(Mathf.Max(1f, len), 10f));
+                bar.pivot = new Vector2(0f, 0.5f);
+                bar.anchoredPosition = Vector2.zero;
+                bar.localRotation = Quaternion.Euler(0f, 0f, 90f - v.DirectionDeg);
+                Image bi = bar.gameObject.AddComponent<Image>();
+                bi.color = p.Emphasis;
+                bi.raycastTarget = false;
+                RectTransform end = Child(slot, "End", Polar(len, v.DirectionDeg), new Vector2(26f, 26f));
+                Image ei = _ui.Round(end.gameObject.AddComponent<Image>(), 13);
+                ei.color = p.Emphasis;
+                ei.raycastTarget = false;
+                Label(slot, v.Shown, Polar(len + 46f, v.DirectionDeg), p.BodySize - 4, p.Text, true);
+            }
+            RectTransform centre = Child(slot, "Centre", Vector2.zero, new Vector2(18f, 18f));
+            Image ci = _ui.Round(centre.gameObject.AddComponent<Image>(), 9);
+            ci.color = p.Text;
+            ci.raycastTarget = false;
+        }
+
+        private static Vector2 Polar(float radius, float directionDeg)
+        {
+            float a = directionDeg * Mathf.Deg2Rad;
+            return new Vector2(Mathf.Sin(a), Mathf.Cos(a)) * radius;
+        }
+
+        private static RectTransform Child(RectTransform parent, string name, Vector2 position, Vector2 sizeDelta)
+        {
+            RectTransform r = StudyUi.NewRect(name, parent);
+            r.anchorMin = r.anchorMax = r.pivot = new Vector2(0.5f, 0.5f);
+            r.sizeDelta = sizeDelta;
+            r.anchoredPosition = position;
+            return r;
+        }
+
+        private void Label(RectTransform parent, string text, Vector2 position, int size, Color color, bool bold)
+        {
+            Text t = _ui.NewText(parent, text, size, TextAnchor.MiddleCenter, color, bold);
+            var r = (RectTransform)t.transform;
+            r.anchorMin = r.anchorMax = r.pivot = new Vector2(0.5f, 0.5f);
+            r.sizeDelta = new Vector2(150f, size * 1.6f);
+            r.anchoredPosition = position;
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+        }
+
+        /// <summary>Rings and spokes of the diagram as one sprite (built once per session).</summary>
+        private Sprite RangeRingSprite(List<float> ringFractions, int spokes)
+        {
+            if (_rangeRingSprite != null)
+            {
+                return _rangeRingSprite;
+            }
+            const int size = 512;
+            byte[] cov = EyeRangeShapes.RangeRings(size, ringFractions, spokes, 3f);
+            _rangeRingSprite = Track(Sprite.Create(CoverageTexture(cov, size, size, "EyeRangeRings"), new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f), 100f));
+            return _rangeRingSprite;
+        }
+
+        private Texture2D CoverageTexture(byte[] coverage, int width, int height, string name)
+        {
+            Texture2D tex = Track(new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                name = name,
+            });
+            var px = new Color32[coverage.Length];
+            for (int i = 0; i < px.Length; i++)
+            {
+                px[i] = new Color32(255, 255, 255, coverage[i]);
+            }
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            return tex;
+        }
+
+        // ------------------------------------------------------------------ Part 2: advance cue (fast-forward icon)
+        /// <summary>
+        /// Small semi-transparent fast-forward icon (two right-pointing triangles, about 1.875 deg wide) on its own
+        /// world-space canvas, so the clip is not covered by text (user 11-19: no text during Part 2 playback).
+        /// </summary>
+        private void EnsureAdvanceIcon()
+        {
+            if (_advanceIcon != null)
+            {
+                return;
+            }
+            _advanceIcon = Track(new GameObject("AdvanceIcon", typeof(RectTransform)));
+            var canvas = _advanceIcon.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.worldCamera = _rig.Camera;
+            var rt = (RectTransform)_advanceIcon.transform;
+            float widthUnits = 2000f * PanelDistance * Mathf.Tan(0.5f * AdvanceIconWidthDeg * Mathf.Deg2Rad); // 1 unit = 1 mm
+            rt.sizeDelta = new Vector2(widthUnits, widthUnits * 0.62f);
+            rt.localScale = Vector3.one * 0.001f;
+            const int w = 96, hpx = 60;
+            Texture2D tex = CoverageTexture(EyeRangeShapes.FastForward(w, hpx), w, hpx, "AdvanceIcon");
+            RectTransform img = StudyUi.NewRect("Icon", rt);
+            StudyUi.Stretch(img);
+            Image image = img.gameObject.AddComponent<Image>();
+            image.sprite = Track(Sprite.Create(tex, new Rect(0, 0, w, hpx), new Vector2(0.5f, 0.5f), 100f));
+            image.color = new Color(1f, 1f, 1f, 0.55f);
+            image.raycastTarget = false;
+            _advanceIcon.SetActive(false);
+        }
+
+        private const float AdvanceIconWidthDeg = 1.875f; // user 11-20: 1.5 x the first 1.25 deg
+
+        /// <summary>Show the icon at the trial's reference direction (where the alignment cross was).</summary>
+        private void ShowAdvanceIcon(float refYaw, float refPitch)
+        {
+            EnsureAdvanceIcon();
+            Vector3 dir = Quaternion.Euler(-refPitch, refYaw, 0f) * Vector3.forward;
+            _advanceIcon.transform.position = _rig.HeadPosition + dir * PanelDistance;
+            _advanceIcon.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+            _advanceIcon.SetActive(true);
+        }
+
+        private void HideAdvanceIcon()
+        {
+            if (_advanceIcon != null)
+            {
+                _advanceIcon.SetActive(false);
+            }
+        }
+
+        /// <summary>Choose the Part 2 PAw correction radius, write session.json "eye_range" and log the choice.</summary>
+        private void FinishEyeRange(string source)
+        {
+            EyeRangePlan er = _s.Plan.EyeRange;
+            Dictionary<string, object> block = _s.ResolveEyeRange(er, source);
+            _s.Session["eye_range"] = block;
+            WriteSession();
+            string medians = string.Join(" ", ((List<object>)block["per_direction"]).Cast<Dictionary<string, object>>()
+                .Select(m => CsvLog.Format(m["direction_deg"]) + ":" + (m["median_head_onset_ecc_deg"] == null ? "-" : CsvLog.Format(m["median_head_onset_ecc_deg"]))));
+            string shown = string.Join(" ", ((List<object>)block["per_direction"]).Cast<Dictionary<string, object>>()
+                .Select(m => CsvLog.Format(m["direction_deg"]) + ":" + m["shown"]));
+            LogEvent("eyerange_result", string.Format(CultureInfo.InvariantCulture,
+                "a {0} deg (shown {1}), PAw theta {2} deg ({3}); rule {4}, {5} > {6:0.##} deg, {7:0.##} deg/s up to {8:0.##} deg, provisional; "
+                + "censored {9}, stopped early {10}; median by direction {11}; shown by direction {12}",
+                block["a_deg"] == null ? "-" : CsvLog.Format(block["a_deg"]), block["a_shown"], StudyPlan.FormatTheta(_s.PawThetaDeg), _s.PawThetaSource,
+                er.Rule, er.Measure, er.HeadThresholdDeg, er.SpeedDegPerSecond, er.MaxEccentricityDeg, block["censored"], block["stopped_early"],
+                medians, shown));
+            LogEvent("paw_theta", StudyPlan.FormatTheta(_s.PawThetaDeg) + " deg (" + _s.PawThetaSource + ")");
+        }
+
+        /// <summary>Before Part 2: when the eye-range step did not run, use the plan default (15 deg) and log it.</summary>
+        private void EnsurePawTheta()
+        {
+            if (_s.PawThetaDeg > 0f)
+            {
+                return;
+            }
+            EyeRangePlan er = _s.Plan.EyeRange;
+            string source = !er.Present ? "default_no_block"
+                : !_s.Plan.Flow.Any(f => f.Kind == FlowStepKind.EyeRange) ? "default_not_in_flow"
+                : !er.Enabled ? "default_disabled" : "default_skipped";
+            FinishEyeRange(source);
+        }
+
+        /// <summary>Part 2 stimulus with the PAw correction radius of this participant (PA names are unchanged).</summary>
+        private string Part2File(string file)
+        {
+            return StudyPlan.ResolvePawTheta(file, _s.PawThetaDeg);
         }
 
         // ------------------------------------------------------------------ gaze training (before Part 2)
@@ -625,9 +1084,11 @@ namespace Pano2StereoVR.Study
             _advanceRequested = false;
             _hintLabel = "";
             _ui?.HideHint();
+            HideAdvanceIcon();
         }
 
         // ------------------------------------------------------------------ Part 2: PA vs PAw
+        /// <summary>One part2.csv row; paw_theta_deg is the participant's PAw correction radius (the same in every row).</summary>
         private void WritePart2Row(StudyTrial t, object different, string preference, object rt1, string rt2, PlaybackStats a,
             PlaybackStats b, float maxA, float maxB, object alignS, object startDev, int restartsA, int restartsB,
             bool reminderOffA, bool reminderOffB, bool skipped)
@@ -638,7 +1099,7 @@ namespace Pano2StereoVR.Study
                 a != null ? (object)a.Loops : "", b != null ? (object)b.Loops : "",
                 a != null ? (object)Round(maxA, 2) : "", b != null ? (object)Round(maxB, 2) : "", alignS, startDev,
                 restartsA, restartsB, a != null ? (object)(reminderOffA ? 1 : 0) : "", b != null ? (object)(reminderOffB ? 1 : 0) : "",
-                skipped ? 1 : 0);
+                Round(_s.PawThetaDeg, 2), skipped ? 1 : 0);
         }
 
         /// <summary>Result of one Part 2 segment: the completed viewing and how often it was restarted.</summary>
@@ -700,6 +1161,9 @@ namespace Pano2StereoVR.Study
                 {
                     fullViewed = true;
                     allowed?.Invoke();
+                    // user 11-20: a small fast-forward icon where the cross was, no text (hidden by StopAdvance)
+                    ShowAdvanceIcon(t.ReferenceYawDeg, t.ReferencePitchDeg);
+                    LogEvent("part2_advance_cue", "trial " + t.Index + " segment " + seg);
                 };
                 yield return _clips.Play(s, req, stats);
                 StopAdvance();
@@ -817,6 +1281,7 @@ namespace Pano2StereoVR.Study
 
         private IEnumerator Part2Step(StudyPart part)
         {
+            EnsurePawTheta(); // user 11-20: PAw files of the participant's correction radius (15 deg when not measured)
             ShowGray();
             bool go = false;
             yield return ShowHmdPanel("part2_title", "part2_intro", "start", () => go = true, () => go);
@@ -827,8 +1292,8 @@ namespace Pano2StereoVR.Study
             {
                 yield break;
             }
-            StudyClipPlayer.Slot slotA = _clips.Prepare(0, StimulusPath(trials[0].FileA));
-            StudyClipPlayer.Slot slotB = _clips.Prepare(1, StimulusPath(trials[0].FileB));
+            StudyClipPlayer.Slot slotA = _clips.Prepare(0, StimulusPath(Part2File(trials[0].FileA)));
+            StudyClipPlayer.Slot slotB = _clips.Prepare(1, StimulusPath(Part2File(trials[0].FileB)));
 
             for (int i = 0; i < trials.Count; i++)
             {
@@ -859,7 +1324,7 @@ namespace Pano2StereoVR.Study
                 var segB = new Part2Segment();
                 if (!Interrupted)
                 {
-                    yield return PlayPart2Segment(t, part.Options, "A", t.FileA, 0, slotA, "segment_first", head, segA);
+                    yield return PlayPart2Segment(t, part.Options, "A", Part2File(t.FileA), 0, slotA, "segment_first", head, segA);
                     statsA = segA.Stats;
                     maxA = segA.MaxDeg;
                     playedA = true;
@@ -869,7 +1334,7 @@ namespace Pano2StereoVR.Study
                 }
                 if (!Interrupted)
                 {
-                    yield return PlayPart2Segment(t, part.Options, "B", t.FileB, 1, slotB, "segment_second", head, segB);
+                    yield return PlayPart2Segment(t, part.Options, "B", Part2File(t.FileB), 1, slotB, "segment_second", head, segB);
                     statsB = segB.Stats;
                     maxB = segB.MaxDeg;
                     playedB = true;
@@ -880,8 +1345,8 @@ namespace Pano2StereoVR.Study
                 // preload the next pair while the participant answers
                 if (i + 1 < trials.Count)
                 {
-                    slotA = _clips.Prepare(0, StimulusPath(trials[i + 1].FileA));
-                    slotB = _clips.Prepare(1, StimulusPath(trials[i + 1].FileB));
+                    slotA = _clips.Prepare(0, StimulusPath(Part2File(trials[i + 1].FileA)));
+                    slotB = _clips.Prepare(1, StimulusPath(Part2File(trials[i + 1].FileB)));
                 }
 
                 int different = -1;

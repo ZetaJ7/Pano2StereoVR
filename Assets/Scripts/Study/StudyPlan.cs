@@ -13,10 +13,16 @@ namespace Pano2StereoVR.Study
     /// (group_index, group_size, position_in_group; training trials have group_index 0).
     /// Format 4 (2026-11-19, second walkthrough): flow token "break" (rest, then the participant starts),
     /// and an "alignment" block (head within tolerance_deg of the reference for dwell_s starts playback).
+    /// Format 5 (2026-11-20, user decisions 11-20): flow token "eyerange" (natural viewing range measurement,
+    /// before the gaze training) with an "eye_range" block, and Part 2 PAw file names with the placeholder
+    /// <see cref="PawThetaPlaceholder"/>, resolved at run time to the correction radius chosen for the participant.
     /// </summary>
     public sealed class StudyPlan
     {
-        public const int SupportedFormatVersion = 4;
+        public const int SupportedFormatVersion = 5;
+
+        /// <summary>Placeholder for the pose-aware correction radius (deg) in Part 2 file names, e.g. near_A__paw_t{paw_theta}.mp4.</summary>
+        public const string PawThetaPlaceholder = "{paw_theta}";
 
         public int PlanFormatVersion;
         public string StudyId = "";
@@ -32,6 +38,7 @@ namespace Pano2StereoVR.Study
         public StereoTestPlan StereoTest = new StereoTestPlan();
         public GazeTrainingPlan GazeTraining = new GazeTrainingPlan();
         public AlignmentPlan Alignment = new AlignmentPlan();
+        public EyeRangePlan EyeRange = new EyeRangePlan();
         public List<StudyPart> Parts = new List<StudyPart>();
 
         public StudyPart GetPart(int number)
@@ -41,6 +48,10 @@ namespace Pano2StereoVR.Study
 
         public List<int> PartOrder => Flow.Where(s => s.Kind == FlowStepKind.Part).Select(s => s.PartNumber).ToList();
 
+        /// <summary>
+        /// Every stimulus file the plan may play. A PAw name with <see cref="PawThetaPlaceholder"/> is listed once per
+        /// correction-radius variant, so the check-in missing-stimuli check covers every variant.
+        /// </summary>
         public IEnumerable<string> AllStimulusFiles()
         {
             var seen = new HashSet<string>();
@@ -50,13 +61,42 @@ namespace Pano2StereoVR.Study
                 {
                     foreach (string f in new[] { t.File, t.FileA, t.FileB })
                     {
-                        if (!string.IsNullOrEmpty(f) && seen.Add(f))
+                        if (string.IsNullOrEmpty(f))
                         {
-                            yield return f;
+                            continue;
+                        }
+                        foreach (string name in ExpandPawTheta(f))
+                        {
+                            if (seen.Add(name))
+                            {
+                                yield return name;
+                            }
                         }
                     }
                 }
             }
+        }
+
+        /// <summary>A file name with the placeholder expanded over every variant; other names unchanged.</summary>
+        public IEnumerable<string> ExpandPawTheta(string file)
+        {
+            if (string.IsNullOrEmpty(file) || !file.Contains(PawThetaPlaceholder))
+            {
+                return new[] { file };
+            }
+            return EyeRange.PawThetaVariantsDeg.Select(v => ResolvePawTheta(file, v));
+        }
+
+        /// <summary>Replace the placeholder with the correction radius (deg), e.g. near_A__paw_t20.mp4.</summary>
+        public static string ResolvePawTheta(string file, float thetaDeg)
+        {
+            return string.IsNullOrEmpty(file) ? file : file.Replace(PawThetaPlaceholder, FormatTheta(thetaDeg));
+        }
+
+        /// <summary>Radius as written in file names: 20 -> "20", 12.5 -> "12.5" (as make_trial_plans.format_theta).</summary>
+        public static string FormatTheta(float thetaDeg)
+        {
+            return thetaDeg.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         public static StudyPlan Load(string path)
@@ -142,6 +182,11 @@ namespace Pano2StereoVR.Study
                 {
                     throw new FormatException("alignment.tolerance_deg must be positive and dwell_s not negative");
                 }
+            }
+
+            if (root.TryGetValue("eye_range", out object erObj) && erObj is Dictionary<string, object> er)
+            {
+                plan.EyeRange = EyeRangePlan.FromJson(er);
             }
 
             if (root.TryGetValue("gaze_training", out object gtObj) && gtObj is Dictionary<string, object> gt)
@@ -231,7 +276,201 @@ namespace Pano2StereoVR.Study
             {
                 throw new FormatException("flow has gazetraining but the plan has no gaze_training block");
             }
+            int eyeStep = plan.Flow.FindIndex(s => s.Kind == FlowStepKind.EyeRange);
+            if (eyeStep >= 0 && !plan.EyeRange.Present)
+            {
+                throw new FormatException("flow has eyerange but the plan has no eye_range block");
+            }
+            int part2Step = plan.Flow.FindIndex(s => s.Kind == FlowStepKind.Part && s.PartNumber == 2);
+            if (eyeStep >= 0 && part2Step >= 0 && eyeStep > part2Step)
+            {
+                throw new FormatException("eyerange must come before part:2 (it chooses the PAw correction radius)");
+            }
+            bool placeholder = plan.Parts.SelectMany(p => p.Trials)
+                .Any(t => new[] { t.File, t.FileA, t.FileB }.Any(f => !string.IsNullOrEmpty(f) && f.Contains(PawThetaPlaceholder)));
+            if (placeholder && !plan.EyeRange.Present)
+            {
+                throw new FormatException("stimulus names use " + PawThetaPlaceholder + " but the plan has no eye_range block");
+            }
             return plan;
+        }
+    }
+
+    /// <summary>One outward sweep of the natural viewing range measurement.</summary>
+    public sealed class EyeRangeSweep
+    {
+        public int Index;
+        /// <summary>Direction of the sweep around the reference, degrees clockwise from the top as seen by the viewer.</summary>
+        public float DirectionDeg;
+        /// <summary>Repetition of this direction (0-based).</summary>
+        public int Repeat;
+    }
+
+    /// <summary>
+    /// Natural viewing range measurement (user decisions 11-20), before the gaze training. Continuous outward sweeps
+    /// (option A, user 11-20; natural viewing is a continuous search): the head is aligned to the central cross, then
+    /// a dot starts at the cross and moves outward along one direction at a constant angular speed up to the maximum
+    /// eccentricity, and the participant follows it naturally with the gaze. The head rotation since the sweep onset
+    /// is recorded on every frame; the dot eccentricity at which it first exceeds the threshold is the head onset
+    /// eccentricity of that sweep. a (the eye-only range) is the median over the sweeps and chooses the pose-aware
+    /// (PAw) correction radius used in Part 2. Rule, threshold, speed and range are provisional (to be fixed after the
+    /// pilot); the raw frames are kept in eyerange_trace.csv. The discrete mode of the first 11-20 version is removed.
+    /// </summary>
+    public sealed class EyeRangePlan
+    {
+        public const string ModeContinuous = "continuous";
+        public const string RuleMedianOnsetEcc = "median_onset_ecc";
+        /// <summary>Measure (user 11-20): great-circle head rotation since the sweep onset.</summary>
+        public const string MeasureHeadRot = "head_rot_deg";
+
+        /// <summary>The plan has an eye_range block.</summary>
+        public bool Present;
+        public bool Enabled;
+        public string Mode = ModeContinuous;
+        public string Rule = RuleMedianOnsetEcc;
+        public string Measure = MeasureHeadRot;
+        public List<float> DirectionsDeg = new List<float>();
+        public int Repeats = 2;
+        public float SpeedDegPerSecond = 8f;
+        public float MaxEccentricityDeg = 40f;
+        public float HeadThresholdDeg = 3f;
+        /// <summary>End a sweep as soon as the head rotation exceeds the threshold (user 11-20); censored sweeps run to the maximum.</summary>
+        public bool StopAtOnset = true;
+        public float DotSizeDeg = 1.5f;
+        public float AlignDwellSeconds = 0.5f;
+        public float GapSeconds = 0.3f;
+        public float ReferenceYawDeg;
+        public float ReferencePitchDeg;
+        public List<float> PawThetaVariantsDeg = new List<float> { 10f, 15f, 20f, 25f, 30f };
+        /// <summary>Paper default; used when the step is disabled, not in the flow or skipped.</summary>
+        public float DefaultPawThetaDeg = 15f;
+        public List<EyeRangeSweep> Sweeps = new List<EyeRangeSweep>();
+
+        /// <summary>Duration of one sweep from the cross to the maximum eccentricity (s).</summary>
+        public float SweepSeconds => SpeedDegPerSecond > 0f ? MaxEccentricityDeg / SpeedDegPerSecond : 0f;
+
+        public static EyeRangePlan FromJson(Dictionary<string, object> e)
+        {
+            var p = new EyeRangePlan
+            {
+                Present = true,
+                Enabled = MiniJson.GetBool(e, "enabled", true),
+                Mode = MiniJson.GetString(e, "mode", ModeContinuous),
+                Rule = MiniJson.GetString(e, "rule", RuleMedianOnsetEcc),
+                Measure = MiniJson.GetString(e, "measure", MeasureHeadRot),
+                Repeats = (int)MiniJson.GetLong(e, "repeats", 2),
+                SpeedDegPerSecond = (float)MiniJson.GetNumber(e, "speed_deg_s", 8.0),
+                MaxEccentricityDeg = (float)MiniJson.GetNumber(e, "max_eccentricity_deg", 40.0),
+                HeadThresholdDeg = (float)MiniJson.GetNumber(e, "head_threshold_deg", 3.0),
+                StopAtOnset = MiniJson.GetBool(e, "stop_at_onset", true),
+                DotSizeDeg = (float)MiniJson.GetNumber(e, "dot_size_deg", 1.5),
+                AlignDwellSeconds = (float)MiniJson.GetNumber(e, "align_dwell_s", 0.5),
+                GapSeconds = (float)MiniJson.GetNumber(e, "gap_s", 0.3),
+                ReferenceYawDeg = (float)MiniJson.GetNumber(e, "reference_yaw_deg"),
+                ReferencePitchDeg = (float)MiniJson.GetNumber(e, "reference_pitch_deg"),
+                DefaultPawThetaDeg = (float)MiniJson.GetNumber(e, "default_paw_theta_deg", 15.0),
+            };
+            p.DirectionsDeg = Floats(MiniJson.GetList(e, "directions_deg"));
+            if (e.ContainsKey("paw_theta_variants_deg"))
+            {
+                p.PawThetaVariantsDeg = Floats(MiniJson.GetList(e, "paw_theta_variants_deg"));
+            }
+            foreach (object o in MiniJson.GetList(e, "sweeps"))
+            {
+                Dictionary<string, object> t = MiniJson.AsObject(o, "eye_range sweep");
+                p.Sweeps.Add(new EyeRangeSweep
+                {
+                    Index = (int)MiniJson.GetLong(t, "index"),
+                    DirectionDeg = (float)MiniJson.GetNumber(t, "direction_deg"),
+                    Repeat = (int)MiniJson.GetLong(t, "repeat"),
+                });
+            }
+            if (p.Mode != ModeContinuous)
+            {
+                throw new FormatException("eye_range.mode '" + p.Mode + "' is not supported (only " + ModeContinuous
+                    + "; the discrete mode was removed on 11-20); regenerate the plan with make_trial_plans.py");
+            }
+            if (p.Rule != RuleMedianOnsetEcc || p.Measure != MeasureHeadRot)
+            {
+                throw new FormatException("eye_range: rule must be " + RuleMedianOnsetEcc + " and measure " + MeasureHeadRot);
+            }
+            if (p.PawThetaVariantsDeg.Count == 0 || p.PawThetaVariantsDeg.Any(v => v <= 0f) || !p.PawThetaVariantsDeg.Contains(p.DefaultPawThetaDeg))
+            {
+                throw new FormatException("eye_range: paw_theta_variants_deg must be positive and contain default_paw_theta_deg");
+            }
+            if (p.SpeedDegPerSecond <= 0f || p.MaxEccentricityDeg <= 0f || p.HeadThresholdDeg < 0f || p.Repeats < 1)
+            {
+                throw new FormatException("eye_range: speed_deg_s and max_eccentricity_deg must be positive, repeats at least 1, head_threshold_deg not negative");
+            }
+            if (p.Enabled && p.Sweeps.Count == 0)
+            {
+                throw new FormatException("eye_range is enabled but has no sweeps");
+            }
+            if (p.Sweeps.Any(t => !p.DirectionsDeg.Contains(t.DirectionDeg)))
+            {
+                throw new FormatException("eye_range: a sweep direction is not in directions_deg");
+            }
+            return p;
+        }
+
+        private static List<float> Floats(List<object> list)
+        {
+            return list.Select(x => Convert.ToSingle(x, CultureInfo.InvariantCulture)).ToList();
+        }
+
+        /// <summary>Median of the values (NaN when empty).</summary>
+        public static double Median(IEnumerable<double> values)
+        {
+            List<double> v = values.Where(x => !double.IsNaN(x)).OrderBy(x => x).ToList();
+            if (v.Count == 0)
+            {
+                return double.NaN;
+            }
+            int m = v.Count / 2;
+            return v.Count % 2 == 1 ? v[m] : 0.5 * (v[m - 1] + v[m]);
+        }
+
+        /// <summary>
+        /// Head onset eccentricity of one sweep: the dot eccentricity of the first frame whose head rotation since
+        /// the sweep onset exceeds the threshold. censored = true (and NaN) when it never does.
+        /// </summary>
+        public static float OnsetEccentricity(IList<float> dotEccDeg, IList<float> headRotDeg, float thresholdDeg, out bool censored)
+        {
+            int n = Math.Min(dotEccDeg.Count, headRotDeg.Count);
+            for (int i = 0; i < n; i++)
+            {
+                if (headRotDeg[i] > thresholdDeg)
+                {
+                    censored = false;
+                    return dotEccDeg[i];
+                }
+            }
+            censored = true;
+            return float.NaN;
+        }
+
+        /// <summary>
+        /// Provisional rule "median_onset_ecc" (user 11-20): a is the median head onset eccentricity over the
+        /// sweeps; a censored sweep (the head never passed the threshold) counts as the maximum eccentricity.
+        /// </summary>
+        public static float NaturalRangeDeg(IEnumerable<KeyValuePair<float, bool>> onsetAndCensored, float maxEccentricityDeg)
+        {
+            double m = Median(onsetAndCensored.Select(kv => kv.Value ? (double)maxEccentricityDeg : kv.Key));
+            return double.IsNaN(m) ? float.NaN : (float)m;
+        }
+
+        /// <summary>The variant nearest to a (clamped to the variant range: a = 40 gives 30); ties go to the smaller radius.</summary>
+        public static float NearestVariant(IEnumerable<float> variants, float aDeg)
+        {
+            float best = float.NaN;
+            foreach (float v in variants.OrderBy(x => x))
+            {
+                if (float.IsNaN(best) || Math.Abs(v - aDeg) < Math.Abs(best - aDeg) - 1e-4f)
+                {
+                    best = v;
+                }
+            }
+            return best;
         }
     }
 
@@ -420,6 +659,7 @@ namespace Pano2StereoVR.Study
         Ssq,
         HmdFit,
         StereoTest,
+        EyeRange,
         GazeTraining,
         Part,
         BreakSsq,
@@ -428,7 +668,7 @@ namespace Pano2StereoVR.Study
         End,
     }
 
-    /// <summary>One entry of the plan flow, e.g. "ssq:S_pre", "part:1", "ssq:S_mid1", "break", "gazetraining", "part:2".</summary>
+    /// <summary>One entry of the plan flow, e.g. "ssq:S_pre", "part:1", "ssq:S_mid1", "break", "eyerange", "gazetraining", "part:2".</summary>
     public readonly struct FlowStep
     {
         public readonly FlowStepKind Kind;
@@ -462,6 +702,7 @@ namespace Pano2StereoVR.Study
                 case "ssq": return new FlowStep(FlowStepKind.Ssq, RequireArg(raw, arg));
                 case "hmd_fit": return new FlowStep(FlowStepKind.HmdFit, arg);
                 case "stereotest": return new FlowStep(FlowStepKind.StereoTest, arg);
+                case "eyerange": return new FlowStep(FlowStepKind.EyeRange, arg);
                 case "gazetraining": return new FlowStep(FlowStepKind.GazeTraining, arg);
                 case "part":
                     if (!int.TryParse(RequireArg(raw, arg), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) || (n != 1 && n != 2))

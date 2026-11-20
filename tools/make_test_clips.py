@@ -1,6 +1,6 @@
 """Write small synthetic top-bottom stereo ERP clips for checking the Unity study flow on the desktop.
 
-Every stimulus file named in the plans gets a 3 s, 25 fps, 1024x1024 H.264 clip (left eye on top):
+Every stimulus file named in the plans (every PAw correction-radius variant) gets a 3 s, 25 fps, 1024x1024 H.264 clip (left eye on top):
 a latitude/longitude grid, "FRONT"/"LEFT"/"RIGHT"/"BACK" labels at 0/-90/+90/180 deg longitude, the clip id
 and condition, the eye letter, and a frame counter. A box in front (0 deg) carries a small crossed disparity,
 so it should appear nearer than the grid in the headset. These clips are test material only.
@@ -63,11 +63,18 @@ def main() -> int:
     files = set()
     for p in sorted(args.plans.glob("*.json")):
         plan = json.loads(p.read_text(encoding="utf-8"))
+        # plan format 5: PAw names carry "{paw_theta}"; one clip per correction-radius variant
+        variants = plan.get("eye_range", {}).get("paw_theta_variants_deg", [])
         for part in plan["parts"]:
             for t in part["trials"]:
                 for k in ("file", "file_a", "file_b"):
-                    if t.get(k):
-                        files.add(t[k])
+                    name = t.get(k)
+                    if not name:
+                        continue
+                    if "{paw_theta}" in name:
+                        files.update(name.replace("{paw_theta}", f"{float(v):g}") for v in variants)
+                    else:
+                        files.add(name)
     args.out.mkdir(parents=True, exist_ok=True)
     f_small = font(20)
     for name in sorted(files):

@@ -130,3 +130,31 @@ Claude 与 GPT 在主观实验程序（本工作树）上协作的交流文档�
 - 阈值 7.5°：配置与清单重新生成。
 - 请 Fable 注意：上述几处为流程逻辑，未动 UI 工厂与主题；编辑前请在第 3 节登记，避免同时改 `StudyController.Steps.cs` 与 `StudyTexts.json`。
 - 离线编译 0 错误，EditMode 40/40。
+
+### 2026-11-20 11:10 Claude：自然注视范围测量与 PAw 半径按人选择（走查第 52–56 条，用户 11-20 决定）
+
+- 新步骤 `eyerange`（自然注视范围测量），flow 中在 `gazetraining` 之前；指导语不提头部。8 方向 × 偏心度 10–35° = 48 个圆点，按被试随机；每个圆点前用 `AlignToReference` 对准十字（新增可选参数：保持时长、是否显示偏离读数），十字消失后出现圆点，扳机或空格时记录头部相对参考方向的 yaw、pitch、偏离、沿圆点方向分量与反应时。全程屏蔽手动 Recenter；QA 跳过与中止照常。
+- 暂定规则得到 a，PAw 半径 θ 取 {10, 15, 20, 25, 30}° 中最接近 a 的一个；跳过或关闭时 15°。第二部分 PAw 文件名带占位符 `{paw_theta}`（`<clip_id>__paw_t<θ>.mp4`），签到缺失检查覆盖全部变体。
+- 数据契约 v6（新增 `eyerange.csv`，`part2.csv` 加 `paw_theta_deg`，`session.json` 加 `eye_range`）；plan 格式 5；P01–P30 与 AP01 已重新生成，逐个比较确认其余部分试次顺序不变。
+- 改了 `StudyController.cs`、`StudyController.Steps.cs`、`StudyPlan.cs`、`StudySessionState.cs`、`StudyDataLogger.cs`、`StudyAutopilot.cs`、`StudyTexts.json`（新增 `eyerange_*`，`status_recenter_locked` 措辞）、测试、`StudyTools/`、`tools/make_test_clips.py`、三份文档。未动 UI 工厂与主题文件（`StudyUi.cs` 等），只用其公开方法。
+- 离线编译 0 错误，EditMode 44/44；模拟数据 + 分析端到端通过。未在编辑器中运行。
+
+### 2026-11-20 11:40 Claude：eyerange 的 a 改用圆点出现后的头部转动量（走查第 57 条，用户 11-20 决定）
+
+- a 的暂定规则改用 `head_rot_deg`（圆点出现到按下之间头部朝向的大圆角），不再用相对参考方向的偏离；`eyerange.csv` 增加 `onset_dev_deg`、`head_rot_deg`、`head_rot_along_deg`，原有相对参考方向的列保留；`session.json` 的 `eye_range` 增加 `measure` 与两种中位数。数据契约仍为 v6（尚未用于采集，README 注明发布前修订）。清单与配置加 `eye_range.measure`，P01–P30、AP01 重新生成（与 HEAD 比较，已有部分试次顺序不变）。
+- 默认值（圆点 1.5°、对准保持 0.5 s、间隔 0.3 s、距离相同取较小 θ）在 `pending_user_decision` 标为“预实验后按实测调整”；`docs/stimulus_plan_20261119.md` 记下中间 PNG 可分散在 173 的 disk1–4 与 nvme1，最后统一清理、删前列路径请用户批准。
+- 离线编译 0 错误，EditMode 45/45；模拟数据 + 分析端到端通过。未动 UI 工厂与主题文件。
+
+### 2026-11-20 12:20 Claude：eyerange 改为连续向外扫动（走查第 58 条，用户 11-20 决定，方案 A）
+
+- 离散圆点方式已删除（清单 `eye_range.mode` 只接受 `continuous`）。8 个方向 × 2 次 = 16 次扫动，按被试随机；每次对准十字（保持 0.5 s）后圆点从十字处以 8°/s 匀速移到 40° 后消失，不需按键。逐帧数据写入新文件 `eyerange_trace.csv`，每次扫动一行汇总写入 `eyerange.csv`（头部转动首次超过 3.0° 时的圆点偏心度，未超过则删失）。a = 16 次的中位数（删失按 40° 计），θ 取最近的变体。`session.json` 的 `eye_range` 已改。数据契约仍为 v6（第二次发布前修订）。
+- 速度、最大偏心度、次数、圆点、对准保持、间隔、距离相同取较小 θ 标为“预实验后按实测调整”。自动驾驶模拟头部从 20° 起追赶圆点，θ = 20。P01–P30、AP01 重新生成，与提交版本比较，其余部分试次顺序不变。
+- 改了 `StudyController.cs`、`StudyController.Steps.cs`、`StudyPlan.cs`、`StudySessionState.cs`、`StudyDataLogger.cs`、`StudyAutopilot.cs`、`StudyTexts.json`（`eyerange_intro`、`eyerange_cue`）、测试、`StudyTools/`、三份文档；未动 UI 工厂与主题文件。
+- 离线编译 0 错误，EditMode 45/45；模拟数据 + 分析端到端通过。每位被试约 2–2.5 min（未实测）。
+
+### 2026-11-20 13:20 Claude：eyerange 提前结束与结果页，第二部分快进图标（走查第 59–61 条，用户 11-20 头显实测后决定）
+
+- eyerange 每次扫动在头部转动超过阈值的那一帧结束（`eye_range.stop_at_onset`），`eyerange.csv` 加 `stopped_early`。16 次后显示结果页：头显内与电脑屏幕同步显示 8 个方向的径向条（两次的中位数，删失为“≥40°”）、10°–40° 参考圆、一行 a；被试按“下一步”结束。显示的数值、显示与确认时间写入 `events.csv`（`eyerange_result`、`eyerange_result_shown`、`eyerange_result_confirmed`）与 `session.json`。原“测量完成”页删除。
+- 第二部分某段可前进时，在参考方向显示半透明快进图标（约 1.25°），`events.csv` 记 `part2_advance_cue`。
+- **请 Fable 注意**：未改 UI 工厂与主题文件。结果页的简图在 `StudyController.Steps.cs`（`BuildRangeDiagram`）里用 `StudyUi` 的公开方法（`NewRect`、`Round`、`NewText`、`PaletteFor`、`HmdButton`、`Title`、`Strong`、`Note`）搭建；参考圆纹理与快进图标的形状在新文件 `StudyEyeRangeShapes.cs`（纯 C#）。快进图标是控制器自建的一个世界空间画布（`AdvanceIcon`），不经过 `StudyUi`。版面未在编辑器中看过，若要调整样式，请在第 3 节登记后改 `BuildRangeDiagram`。
+- 数据契约仍为 v6（第三次发布前修订）。P01–P30、AP01 重新生成（只有 `eye_range.stop_at_onset` 与校验和变化，试次顺序不变）。离线编译 0 错误，EditMode 49/49；模拟数据 + 分析端到端通过。

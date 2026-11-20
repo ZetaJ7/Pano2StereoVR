@@ -7,6 +7,15 @@ Usage:
 Each plan is a JSON file read by the Unity study mode. The random order depends only on
 (study_id, config_version, participant_id), so a plan can be regenerated exactly.
 
+Plan format 5 (2026-11-20, user decisions 11-20): flow token "eyerange" (natural viewing range
+measurement, before the gaze training) with an "eye_range" block: continuous outward sweeps (user 11-20,
+option A), one per direction x repeat in a random order per participant, the sweep speed and range, the
+provisional rule for the participant's natural eye-only range a, and the pose-aware (PAw) correction
+radius variants. Part 2 PAw file names carry the
+placeholder "{paw_theta}" (config part2.file_patterns), resolved at run time to the variant nearest to a;
+the plan lists every variant in eye_range.paw_theta_variants_deg. The eye-range order uses its own
+random stream (derived from the participant seed), so the orders of the other parts are unchanged.
+
 Plan format 4 (2026-11-19, second walkthrough): flow token "break" (rest of at least min_break_s,
 then the participant chooses when to continue) and an "alignment" block (playback of a Part 2 trial
 and the gaze training start once the head stays within tolerance_deg of the reference for dwell_s).
@@ -26,6 +35,8 @@ Ordering rules:
   * Stereo test: one practice trial, then each disparity level `repeats_per_level` times in random
     order; the target shape is random and never repeats on consecutive trials.
   * Gaze training: one random dot order per allowed attempt.
+  * Eye range (format 5): every direction `repeats` times (one sweep each), shuffled with a separate random
+    stream seeded from the participant seed, so the orders of all other blocks stay as in format 4.
   * Part 1: training trials (one at a time) -> dummy groups (shuffled) -> main groups (shuffled).
     A group is one clip (and repetition) under every condition, shown consecutively. Within-group
     condition orders are the rows of a cyclic Latin square of the configured condition list, taken
@@ -49,10 +60,30 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-PLAN_FORMAT_VERSION = 4
+PLAN_FORMAT_VERSION = 5
 DEFAULT_FLOW = ["checkin", "ssq:S_pre", "hmd_fit", "stereotest", "part:1", "ssq:S_mid1", "break", "ssq:S_mid2", "hmd_fit",
-                "gazetraining", "part:2", "ssq:S_post", "post_questionnaire", "end"]
+                "eyerange", "gazetraining", "part:2", "ssq:S_post", "post_questionnaire", "end"]
 DEFAULT_ALIGNMENT = {"tolerance_deg": 5.0, "dwell_s": 1.0}
+# Placeholder in Part 2 file names for the pose-aware correction radius (degrees), resolved at run time.
+PAW_THETA_PLACEHOLDER = "{paw_theta}"
+DEFAULT_EYE_RANGE = {
+    "mode": "continuous",            # user 11-20, option A: continuous outward sweeps (the discrete mode is removed)
+    "directions_deg": [0, 45, 90, 135, 180, 225, 270, 315],   # 0 = up, clockwise for the viewer
+    "repeats": 2,
+    "speed_deg_s": 8.0,              # pending, to be adjusted after the pilot
+    "max_eccentricity_deg": 40.0,
+    "head_threshold_deg": 3.0,       # provisional (user 11-20), to be fixed after the pilot
+    "stop_at_onset": True,           # user 11-20: a sweep ends as soon as the head-onset criterion is met
+    "rule": "median_onset_ecc",
+    "measure": "head_rot_deg",       # great-circle head rotation since the sweep onset
+    "paw_theta_variants_deg": [10, 15, 20, 25, 30],
+    "default_paw_theta_deg": 15.0,   # used when the step is disabled, absent from the flow or skipped
+    "dot_size_deg": 1.5,
+    "align_dwell_s": 0.5,
+    "gap_s": 0.3,
+    "reference_yaw_deg": 0.0,
+    "reference_pitch_deg": 0.0,
+}
 MAX_SHUFFLE_ATTEMPTS = 20000
 DEFAULT_VIEWING = {"self_paced": False, "min_view_s": None, "max_view_s": 0, "allow_review_on_rerate": False}
 
@@ -87,13 +118,32 @@ def participant_seed(study_id: str, config_version: str, pid: str) -> int:
     return int(digest[:12], 16)
 
 
+def sub_seed(seed: int, name: str) -> int:
+    """Seed of a separate random stream (e.g. the eye-range order), so that adding it leaves the main stream alone."""
+    return int(hashlib.sha256(f"{seed}|{name}".encode("utf-8")).hexdigest()[:12], 16)
+
+
 def participant_number(pid: str, seed: int) -> int:
     digits = re.findall(r"\d+", pid)
     return int(digits[-1]) if digits else seed
 
 
-def stim_file(cfg: dict, clip_id: str, condition: str) -> str:
-    return cfg["file_pattern"].format(clip_id=clip_id, condition=condition)
+def stim_file(cfg: dict, clip_id: str, condition: str, patterns: dict | None = None) -> str:
+    """File name of a stimulus; a per-condition pattern (part2.file_patterns) overrides file_pattern. A
+    {paw_theta} field in the pattern is kept as the placeholder and resolved by the study program."""
+    pattern = (patterns or {}).get(condition, cfg["file_pattern"])
+    return pattern.format(clip_id=clip_id, condition=condition, paw_theta=PAW_THETA_PLACEHOLDER)
+
+
+def format_theta(theta: float) -> str:
+    """Theta in a file name: 20 -> "20", 12.5 -> "12.5" (same as StudyPlan.FormatTheta)."""
+    return f"{float(theta):g}"
+
+
+def expand_paw_theta(name: str, variants: list[float]) -> list[str]:
+    if PAW_THETA_PLACEHOLDER not in name:
+        return [name]
+    return [name.replace(PAW_THETA_PLACEHOLDER, format_theta(v)) for v in variants]
 
 
 def shuffle_no_adjacent_clip(items: list[dict], rng: random.Random) -> list[dict]:
@@ -207,11 +257,12 @@ def build_part2(cfg: dict, rng: random.Random, pnum: int) -> list[dict]:
             same = (c0, c1)[(ci + pnum + s) % 2]
             main.append({"block": "main", "clip_id": clip["clip_id"], "cond_a": same, "cond_b": same, **ref})
     trials.extend(shuffle_no_adjacent_clip(main, rng))
+    patterns = {k: v for k, v in p2.get("file_patterns", {}).items() if k != "note" and isinstance(v, str)}
     for i, t in enumerate(trials):
         t["index"] = i
         t["pair_type"] = "same" if t["cond_a"] == t["cond_b"] else "real"
-        t["file_a"] = stim_file(cfg, t["clip_id"], t["cond_a"])
-        t["file_b"] = stim_file(cfg, t["clip_id"], t["cond_b"])
+        t["file_a"] = stim_file(cfg, t["clip_id"], t["cond_a"], patterns)
+        t["file_b"] = stim_file(cfg, t["clip_id"], t["cond_b"], patterns)
     return trials
 
 
@@ -248,6 +299,39 @@ def build_gaze_training(cfg: dict, rng: random.Random) -> dict | None:
             **{k: float(g[k]) for k in keys if k in g}, "orders": orders}
 
 
+def build_eye_range(cfg: dict, seed: int) -> dict | None:
+    """Natural viewing range measurement, continuous sweeps (user 11-20, option A): every direction `repeats` times,
+    in a random order from a separate stream. The rule for a and the variant choice are applied by the study
+    program (provisional, user 11-20)."""
+    e = cfg.get("eye_range")
+    if e is None:
+        return None
+    v = dict(DEFAULT_EYE_RANGE)
+    v.update({k: e[k] for k in DEFAULT_EYE_RANGE if k in e})
+    dirs = [float(x) for x in v["directions_deg"]]
+    repeats = int(v["repeats"])
+    variants = [float(x) for x in v["paw_theta_variants_deg"]]
+    default = float(v["default_paw_theta_deg"])
+    if v["mode"] != "continuous":
+        raise SystemExit("eye_range.mode must be continuous (the discrete mode was removed on 11-20)")
+    if v["rule"] != "median_onset_ecc" or v["measure"] != "head_rot_deg":
+        raise SystemExit("eye_range: rule must be median_onset_ecc and measure head_rot_deg")
+    if not dirs or len(set(dirs)) != len(dirs) or repeats < 1:
+        raise SystemExit("eye_range: directions_deg must be non-empty without repeats, and repeats at least 1")
+    if float(v["speed_deg_s"]) <= 0 or float(v["max_eccentricity_deg"]) <= 0:
+        raise SystemExit("eye_range: speed_deg_s and max_eccentricity_deg must be positive")
+    if not variants or default not in variants:
+        raise SystemExit("eye_range: default_paw_theta_deg must be one of paw_theta_variants_deg")
+    sweeps = [(d, r) for r in range(repeats) for d in dirs]
+    random.Random(sub_seed(seed, "eye_range")).shuffle(sweeps)
+    scalars = ("speed_deg_s", "max_eccentricity_deg", "head_threshold_deg", "dot_size_deg", "align_dwell_s", "gap_s",
+               "reference_yaw_deg", "reference_pitch_deg")
+    return {"enabled": bool(e.get("enabled", True)), "mode": "continuous", "rule": str(v["rule"]), "measure": str(v["measure"]),
+            "directions_deg": dirs, "repeats": repeats, **{k: float(v[k]) for k in scalars}, "stop_at_onset": bool(v["stop_at_onset"]),
+            "paw_theta_variants_deg": variants, "default_paw_theta_deg": default,
+            "sweeps": [{"index": i, "direction_deg": d, "repeat": r} for i, (d, r) in enumerate(sweeps)]}
+
+
 def make_plan(cfg: dict, cfg_sha: str, pid: str) -> dict:
     seed = participant_seed(cfg["study_id"], cfg["config_version"], pid)
     rng = random.Random(seed)
@@ -258,8 +342,16 @@ def make_plan(cfg: dict, cfg_sha: str, pid: str) -> dict:
         raise SystemExit("flow has gazetraining but the config has no gaze_training block")
     pnum = participant_number(pid, seed)
     p1_trials, p1_groups = build_part1(cfg, rng, pnum)
+    p2_trials = build_part2(cfg, rng, pnum)
     built = {1: {"options": viewing_options(cfg["part1"]), "n_groups": p1_groups, "trials": p1_trials},
-             2: {"options": viewing_options(cfg["part2"]), "trials": build_part2(cfg, rng, pnum)}}
+             2: {"options": viewing_options(cfg["part2"]), "trials": p2_trials}}
+    eye_range = build_eye_range(cfg, seed)  # separate random stream: the orders above do not change
+    if "eyerange" in flow and eye_range is None:
+        raise SystemExit("flow has eyerange but the config has no eye_range block")
+    if "eyerange" in flow and "part:2" in flow and flow.index("eyerange") > flow.index("part:2"):
+        raise SystemExit("eyerange must come before part:2 (it chooses the PAw correction radius)")
+    if eye_range is None and any(PAW_THETA_PLACEHOLDER in t[k] for t in p2_trials for k in ("file_a", "file_b")):
+        raise SystemExit("part2 file names use " + PAW_THETA_PLACEHOLDER + " but the config has no eye_range block")
     part_order = [int(step.split(":")[1]) for step in flow if step.startswith("part:")]
     plan = {
         "plan_format_version": PLAN_FORMAT_VERSION,
@@ -277,6 +369,8 @@ def make_plan(cfg: dict, cfg_sha: str, pid: str) -> dict:
     alignment = dict(DEFAULT_ALIGNMENT)
     alignment.update({k: float(v) for k, v in cfg.get("alignment", {}).items() if k in DEFAULT_ALIGNMENT})
     plan["alignment"] = alignment
+    if eye_range is not None:
+        plan["eye_range"] = eye_range
     if gaze is not None:
         plan["gaze_training"] = gaze
     plan["parts"] = [{"part": n, **built[n]} for n in part_order]
@@ -284,13 +378,15 @@ def make_plan(cfg: dict, cfg_sha: str, pid: str) -> dict:
 
 
 def check_files(cfg: dict, plans: list[dict], stimuli_root: Path) -> list[str]:
+    """Missing stimulus files; PAw names with the theta placeholder are checked for every variant."""
     needed = set()
     for plan in plans:
+        variants = plan.get("eye_range", {}).get("paw_theta_variants_deg", [])
         for part in plan["parts"]:
             for t in part["trials"]:
                 for key in ("file", "file_a", "file_b"):
                     if key in t:
-                        needed.add(t[key])
+                        needed.update(expand_paw_theta(t[key], variants))
     return sorted(f for f in needed if not (stimuli_root / f).is_file())
 
 
@@ -325,7 +421,10 @@ def main() -> int:
         f"part{p['part']} {len(p['trials'])} trials ({sum(t['block'] == 'main' for t in p['trials'])} main"
         + (f", {p['n_groups']} groups" if "n_groups" in p else "") + ")"
         for p in plans[0]["parts"])
-    print(f"wrote {len(plans)} plan(s) to {args.out} | stereotest {len(plans[0]['stereotest']['trials'])} trials | {parts}")
+    er = plans[0].get("eye_range")
+    eye = (f" | eyerange {len(er['sweeps'])} sweeps x {er['max_eccentricity_deg'] / er['speed_deg_s']:g} s, PAw theta variants "
+           f"{er['paw_theta_variants_deg']}" if er else "")
+    print(f"wrote {len(plans)} plan(s) to {args.out} | stereotest {len(plans[0]['stereotest']['trials'])} trials{eye} | {parts}")
     return 0
 
 

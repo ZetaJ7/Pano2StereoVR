@@ -4,9 +4,9 @@ Usage:
     python analyze_study.py --data Data --config study_config.json --out report
     python analyze_study.py --data Data --config study_config.json --analysis analysis_config.json --out report
 
-Inputs: one folder per session under --data, written by the Unity study mode (data contract v5:
-session.json, checkin.json, stereotest.csv, gazetraining.csv, part1.csv, part1_revisions.csv, part1_replays.csv, part2.csv,
-ssq.csv, headpose.csv, playback.csv), plus pre_session.csv transcribed from the paper background form
+Inputs: one folder per session under --data, written by the Unity study mode (data contract v6:
+session.json, checkin.json, stereotest.csv, eyerange.csv, eyerange_trace.csv, gazetraining.csv, part1.csv, part1_revisions.csv, part1_replays.csv,
+part2.csv, ssq.csv, headpose.csv, playback.csv), plus pre_session.csv transcribed from the paper background form
 (in --data or given with --pre-session). Folders written before contract v3 are read where the fields
 exist (e.g. checkin.json pre_session_confirmed is accepted for paper_forms_confirmed).
 
@@ -38,6 +38,11 @@ Methods and sources:
     primary family.
   * Gaze training, viewing times and head deviation are reported as numbers only; no threshold is
     applied unless it is set in the analysis config.
+  * Natural viewing range (contract v6, continuous sweeps, user 11-20): a and the PAw correction radius as
+    logged in session.json, recomputed from the frames in eyerange_trace.csv with the session's threshold and
+    the provisional rule (median head onset eccentricity over the sweeps, censored = maximum eccentricity) as a
+    check; the censored count, the per-direction medians and Part 2 grouped by radius are reported as numbers
+    only (no test, no exclusion).
 """
 from __future__ import annotations
 
@@ -125,12 +130,14 @@ def load_participants(root: Path) -> list[dict]:
             "session": session,
             "checkin": read_json(d / "checkin.json"),
             "stereotest": not_skipped(read_csv(d / "stereotest.csv")),
+            "eyerange": read_csv(d / "eyerange.csv"),
+            "eyerange_trace": read_csv(d / "eyerange_trace.csv"),
             "gazetraining": read_csv(d / "gazetraining.csv"),
             "part1": not_skipped(read_csv(d / "part1.csv")),
             "part1_revisions": read_csv(d / "part1_revisions.csv"),
             "part1_replays": read_csv(d / "part1_replays.csv"),
             "part2": not_skipped(read_csv(d / "part2.csv")),
-            "skipped": {f: count_skipped(read_csv(d / f)) for f in ("stereotest.csv", "part1.csv", "part2.csv")},
+            "skipped": {f: count_skipped(read_csv(d / f)) for f in ("stereotest.csv", "eyerange.csv", "part1.csv", "part2.csv")},
             "ssq": read_csv(d / "ssq.csv"),
             "headpose": read_csv(d / "headpose.csv"),
             "playback": read_csv(d / "playback.csv"),
@@ -410,6 +417,92 @@ def gaze_training_summary(people) -> dict:
         last = max(att)
         out[p["uid"]] = {"attempts": len(att), "max_dev_per_attempt": [float(np.max(att[k])) for k in sorted(att)],
                          "threshold_deg": thr, "last_attempt_passed": passed.get(last)}
+    return out
+
+
+def sweep_onsets_from_trace(trace: list[dict], threshold: float) -> dict:
+    """Per sweep (as in eyerange.csv): the dot eccentricity of the first frame whose head_rot_deg exceeds the
+    threshold, or NaN when it never does (censored). Same rule as EyeRangePlan.OnsetEccentricity."""
+    frames = defaultdict(list)
+    for r in trace:
+        frames[str(r["sweep"])].append(r)
+    out = {}
+    for sw, rows in frames.items():
+        rows.sort(key=lambda r: to_float(r["t_s"]))
+        out[sw] = next((to_float(r["dot_ecc_deg"]) for r in rows if to_float(r["head_rot_deg"]) > threshold), math.nan)
+    return out
+
+
+def nearest_variant(variants: list[float], a: float) -> float:
+    """The variant nearest to a; ties go to the smaller radius (as StudyPlan.cs)."""
+    return min(sorted(variants), key=lambda v: abs(v - a)) if variants and not math.isnan(a) else math.nan
+
+
+def eye_range_summary(people, keep: set[str]) -> dict:
+    """Per session: a, chosen PAw radius, its source and the censored count as logged; a recomputed from
+    eyerange_trace.csv; per-direction medians of the head onset eccentricity (censored = maximum eccentricity).
+    Distribution of the per-direction medians and of a over the kept sessions."""
+    per = {}
+    for p in people:
+        er = p["session"].get("eye_range") or {}
+        rows = not_skipped(p["eyerange"])
+        if not er and not p["eyerange"]:
+            continue
+        thr = to_float(er.get("head_threshold_deg"))
+        emax = to_float(er.get("max_eccentricity_deg"))
+        variants = [float(v) for v in er.get("paw_theta_variants_deg", [])]
+        logged = [(to_float(r["direction_deg"]), emax if yes(r.get("censored")) else to_float(r.get("head_onset_ecc_deg"))) for r in rows]
+        onsets = sweep_onsets_from_trace(p["eyerange_trace"], thr) if not math.isnan(thr) else {}
+        recomputed = [emax if math.isnan(onsets.get(str(r["sweep"]), math.nan)) else onsets[str(r["sweep"])] for r in rows]
+        a_re = float(np.median(recomputed)) if recomputed and not math.isnan(emax) else math.nan
+        dirs = sorted({d_ for d_, _ in logged})
+        per_dir = {d_: float(np.median([v for x, v in logged if x == d_])) for d_ in dirs}
+        a_log = er.get("a_deg")
+        per[p["uid"]] = {"a_deg": to_float(a_log) if a_log is not None else math.nan, "a_recomputed": a_re,
+                         "theta": to_float(er.get("chosen_paw_theta_deg")), "theta_recomputed": nearest_variant(variants, a_re),
+                         "source": er.get("paw_theta_source", ""), "mode": er.get("mode", ""), "threshold": thr,
+                         "speed": to_float(er.get("speed_deg_s")), "max_ecc": emax,
+                         "censored": sum(1 for r in rows if yes(r.get("censored"))),
+                         "stopped_early": sum(1 for r in rows if yes(r.get("stopped_early"))), "n_rows": len(p["eyerange"]),
+                         "n_skipped": count_skipped(p["eyerange"]), "n_frames": len(p["eyerange_trace"]), "per_direction": per_dir,
+                         "time_on_page_s": to_float(er.get("result_time_on_page_s"))}
+    dirs_all = sorted({d_ for v in per.values() for d_ in v["per_direction"]})
+
+    def dist(values) -> dict:
+        x = np.asarray([v for v in values if not math.isnan(v)])
+        if not x.size:
+            return {"n": 0, "min": math.nan, "p25": math.nan, "median": math.nan, "p75": math.nan, "max": math.nan}
+        return {"n": int(x.size), "min": float(x.min()), "p25": float(np.percentile(x, 25)), "median": float(np.median(x)),
+                "p75": float(np.percentile(x, 75)), "max": float(x.max())}
+    kept = {uid: v for uid, v in per.items() if uid in keep}
+    return {"per_session": per, "directions": dirs_all,
+            "distribution": {d_: dist([v["per_direction"].get(d_, math.nan) for v in kept.values()]) for d_ in dirs_all},
+            "a_distribution": dist([v["a_deg"] for v in kept.values() if v["source"] == "measured"])}
+
+
+def part2_theta_of(p: dict) -> float:
+    """PAw correction radius of a session: part2.csv paw_theta_deg (contract v6), else session.json eye_range."""
+    for r in p["part2"]:
+        v = to_float(r.get("paw_theta_deg"))
+        if not math.isnan(v):
+            return v
+    return to_float((p["session"].get("eye_range") or {}).get("chosen_paw_theta_deg"))
+
+
+def part2_by_theta(people, part2: dict) -> dict:
+    """Descriptive Part 2 numbers per PAw radius group (participants of the analysed variant only; no test)."""
+    theta = {p["uid"]: part2_theta_of(p) for p in people}
+    groups = defaultdict(list)
+    for uid, v in part2["per_participant"].items():
+        groups[theta.get(uid, math.nan)].append(v)
+    out = {}
+    for t, vs in groups.items():
+        hits, ns, fas, nn = (sum(v[k] for v in vs) for k in ("hits", "n_signal", "fas", "n_noise"))
+        out[t] = {"n": len(vs), "hit_rate": hits / ns if ns else math.nan, "fa_rate": fas / nn if nn else math.nan,
+                  "dprime_mean": float(np.mean([v["dprime"] for v in vs])),
+                  "pref_mean": float(np.nanmean([v["pref_mean"] for v in vs])) if any(not math.isnan(v["pref_mean"]) for v in vs) else math.nan,
+                  "pref_mean_diff_only": (float(np.nanmean([v["pref_mean_diff_only"] for v in vs]))
+                                          if any(not math.isnan(v["pref_mean_diff_only"]) for v in vs) else math.nan)}
     return out
 
 
@@ -723,8 +816,10 @@ def run(args) -> int:
                   "P4b": p2["pref_test"]["p"], "P5": sq["contrasts"][(pre, post, "TS")]["p"]}
         family = {k: v for k, v in family.items() if k in acfg["primary_family"]}
         results[name] = {"part1": p1, "part2": p2, "ssq": sq, "n": len(keep), "family_p": family,
-                         "family_holm": holm(family), "part1_revisions": part1_revision_summary(people, keep)}
+                         "family_holm": holm(family), "part1_revisions": part1_revision_summary(people, keep),
+                         "part2_by_theta": part2_by_theta(people, p2)}
     gaze = gaze_training_summary(people)
+    eye = eye_range_summary(people, complete)
     viewing = viewing_summary(people, complete)
 
     # ------------------------------------------------------------------ report
@@ -870,6 +965,13 @@ def run(args) -> int:
         rows = [[clip, fmt(v["H"]), fmt(v["F"]), fmt(v["pooled_dprime"]), f"{fmt(v['pref_mean'])} ± {fmt(v['pref_ci95'])}"]
                 for clip, v in sorted(P2["per_clip"].items())]
         L.append(md_table(["片段", "命中率", "虚报率", "合并 d′", "偏好均值 ± 95% CI"], rows))
+        BT = R["part2_by_theta"]
+        if BT:
+            L.append("\n按 PAw 修正半径 θ 分组（描述性，不做检验；θ 由自然注视范围测量按暂定规则选定）：\n")
+            rows = [[("—" if math.isnan(t) else f"{t:g}°"), str(v["n"]), fmt(v["hit_rate"]), fmt(v["fa_rate"]), fmt(v["dprime_mean"]),
+                     fmt(v["pref_mean"]), fmt(v["pref_mean_diff_only"])]
+                    for t, v in sorted(BT.items(), key=lambda kv: (math.isnan(kv[0]), kv[0]))]
+            L.append(md_table(["θ", "人数", "命中率（合并）", "虚报率（合并）", "d′ 均值", "偏好均值（无区别计 0）", "偏好均值（只用有区别）"], rows))
 
         SQ = R["ssq"]
         L.append("\n### 2.3 SSQ（P.919 §7.2.1）\n")
@@ -895,6 +997,37 @@ def run(args) -> int:
         L.append("")
 
     L.append("## 3. 依从性、观看时长与播放\n")
+    if eye["per_session"]:
+        L.append("自然注视范围测量（注视练习之前，连续向外扫动；a 的规则与阈值为暂定，只报数，不剔除）。每次扫动的头部起动偏心度 = "
+                 "头部相对扫动开始时朝向的转动首次超过阈值时圆点的偏心度；a = 全部扫动的中位数，删失（到最大偏心度仍未超过）按最大偏心度计。"
+                 "下表各方向为该方向各次扫动的中位数（°）：\n")
+        dirs = eye["directions"]
+        rows = []
+        for uid, v in sorted(eye["per_session"].items()):
+            rows.append([uid, fmt(v["a_deg"], 1), fmt(v["a_recomputed"], 1), fmt(v["theta"], 0), v["source"] or "—",
+                         f"{fmt(v['speed'], 0)}°/s，{fmt(v['max_ecc'], 0)}°，阈值 {fmt(v['threshold'], 1)}°",
+                         f"{v['n_rows'] - v['n_skipped']}/{v['n_rows']}", str(v["censored"]), str(v["stopped_early"])]
+                        + [fmt(v["per_direction"].get(d_, math.nan), 1) for d_ in dirs])
+        L.append(md_table(["会话", "a（°，记录）", "a（°，逐帧复算）", "θ（°）", "θ 来源", "速度、最大偏心度、阈值", "完成/扫动", "删失", "提前结束"]
+                          + [f"{d_:g}°" for d_ in dirs], rows))
+        mismatch = sorted(uid for uid, v in eye["per_session"].items() if v["source"] == "measured"
+                          and not (abs(v["a_deg"] - v["a_recomputed"]) < 1e-3 and v["theta"] == v["theta_recomputed"]))
+        L.append(f"\n记录值与按 eyerange_trace.csv 逐帧复算不一致的会话：{', '.join(mismatch) or '无'}。"
+                 "结果页时间：" + "；".join(f"{uid} {fmt(v['time_on_page_s'], 1)} s" for uid, v in sorted(eye["per_session"].items())
+                                         if not math.isnan(v["time_on_page_s"])) + "。\n")
+        ad = eye["a_distribution"]
+        L.append(f"a 在完整会话间的分布（按测量结果选定 θ 的会话）：N {ad['n']}，最小 {fmt(ad['min'], 1)}°，P25 {fmt(ad['p25'], 1)}°，"
+                 f"中位数 {fmt(ad['median'], 1)}°，P75 {fmt(ad['p75'], 1)}°，最大 {fmt(ad['max'], 1)}°。\n")
+        L.append("各方向头部起动偏心度中位数在被试间的分布（完整会话，°，只报数）：\n")
+        L.append(md_table(["方向", "N", "最小", "P25", "中位数", "P75", "最大"],
+                          [[f"{d_:g}°", str(x["n"]), fmt(x["min"], 1), fmt(x["p25"], 1), fmt(x["median"], 1), fmt(x["p75"], 1), fmt(x["max"], 1)]
+                           for d_, x in eye["distribution"].items()]))
+        L.append("")
+        write_csv(out / "tables" / "eye_range.csv", ["uid", "a_deg", "a_recomputed", "paw_theta_deg", "source", "censored",
+                                                    "speed_deg_s", "max_eccentricity_deg", "threshold_deg"]
+                  + [f"median_onset_ecc_dir_{d_:g}" for d_ in dirs],
+                  [[uid, v["a_deg"], v["a_recomputed"], v["theta"], v["source"], v["censored"], v["speed"], v["max_ecc"], v["threshold"]]
+                   + [v["per_direction"].get(d_, math.nan) for d_ in dirs] for uid, v in sorted(eye["per_session"].items())])
     if gaze:
         L.append("注视练习（第二部分前；阈值与通过与否为程序按会话配置记录，分析不另设规则）：\n")
         rows = [[uid, str(v["attempts"]), " / ".join(fmt(x, 1) for x in v["max_dev_per_attempt"]), fmt(v["threshold_deg"], 1),
@@ -942,7 +1075,7 @@ def run(args) -> int:
         return o
     (out / "results.json").write_text(json.dumps(jsonable({"analysis_config": acfg, "simulated": simulated,
                                                            "incomplete": incomplete, "duplicates": duplicates,
-                                                           "modes": dict(modes), "gaze_training": gaze,
+                                                           "modes": dict(modes), "gaze_training": gaze, "eye_range": eye,
                                                            "viewing": viewing, "stereotest": st, "results": results}),
                                                           ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"report written to {out / 'report.md'} ({len(complete)} complete participant(s))")

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -64,6 +65,9 @@ namespace Pano2StereoVR.Study.Tests
                 s.BackupPath = "D:/b";
                 s.BackupError = "disk full";
                 s.Part2ReminderOff = true;
+                s.EyeRangeSweeps.Add(new EyeRangeSweepResult { Sweep = 3, DirectionDeg = 90f, HeadOnsetEccDeg = 20f });
+                s.PawThetaDeg = 20f;
+                s.PawThetaSource = "measured";
                 s.PreviewEye = 1f;
                 s.DeferredEvents.Add("t\tlanguage\ten");
                 s.GazeAttempts.Add(new GazeAttemptResult { Attempt = 1, MaxDeg = 7f });
@@ -92,6 +96,71 @@ namespace Pano2StereoVR.Study.Tests
                     Directory.Delete(dir, true);
                 }
             }
+        }
+
+        [Test]
+        public void EyeRangeChoosesThePawRadiusOrTheDefault()
+        {
+            var plan = new EyeRangePlan
+            {
+                Present = true, Enabled = true, HeadThresholdDeg = 3f, MaxEccentricityDeg = 40f, SpeedDegPerSecond = 8f,
+                DirectionsDeg = new List<float> { 0f, 90f, 180f, 270f },
+            };
+            var s = new StudySessionState();
+            // 8 sweeps (2 per direction), one censored: values 14, 18, 20, 21, 22, 24, 26, 40 -> median 21.5 -> radius 20
+            float[,] sw = { { 0f, 14f }, { 0f, 22f }, { 90f, 18f }, { 90f, 24f }, { 180f, 20f }, { 180f, 26f }, { 270f, 21f }, { 270f, -1f } };
+            for (int i = 0; i < sw.GetLength(0); i++)
+            {
+                bool c = sw[i, 1] < 0f;
+                s.EyeRangeSweeps.Add(new EyeRangeSweepResult
+                {
+                    Sweep = i, DirectionDeg = sw[i, 0], Repeat = i % 2, HeadOnsetEccDeg = c ? float.NaN : sw[i, 1], Censored = c, StoppedEarly = !c,
+                    MaxHeadRotDeg = 5f,
+                });
+            }
+            s.EyeRangeSweeps.Add(new EyeRangeSweepResult { Sweep = 99, DirectionDeg = 0f, Skipped = true });
+            Dictionary<string, object> block = s.ResolveEyeRange(plan, "measured");
+            Assert.AreEqual(20f, s.PawThetaDeg);
+            Assert.AreEqual("measured", s.PawThetaSource);
+            Assert.AreEqual(21.5, block["a_deg"]);
+            Assert.AreEqual("continuous", block["mode"]);
+            Assert.AreEqual("head_rot_deg", block["measure"]);
+            Assert.AreEqual(8.0, block["speed_deg_s"]);
+            Assert.AreEqual(3.0, block["head_threshold_deg"]);
+            Assert.AreEqual(1, block["censored"]);
+            Assert.AreEqual(7, block["stopped_early"]);
+            Assert.AreEqual(true, block["stop_at_onset"]);
+            Assert.AreEqual("22°", block["a_shown"], "21.5 shown in whole degrees");
+            Assert.AreEqual(false, block["skipped"]);
+            var perDir = ((List<object>)block["per_direction"]).Cast<Dictionary<string, object>>().ToList();
+            Assert.AreEqual(4, perDir.Count);
+            Assert.AreEqual(18.0, perDir[0]["median_head_onset_ecc_deg"], "direction 0: 14 and 22; the skipped sweep is left out");
+            Assert.AreEqual(2, perDir[0]["n"]);
+            Assert.AreEqual(30.5, perDir[3]["median_head_onset_ecc_deg"], "direction 270: 21 and censored = 40");
+            Assert.AreEqual(1, perDir[3]["censored"]);
+            Assert.AreEqual("18°", perDir[0]["shown"]);
+            Assert.AreEqual("31°", perDir[3]["shown"]);
+
+            // every sweep censored: a = the maximum eccentricity -> the largest radius
+            s.EyeRangeSweeps.Clear();
+            foreach (float d in plan.DirectionsDeg)
+            {
+                s.EyeRangeSweeps.Add(new EyeRangeSweepResult { DirectionDeg = d, HeadOnsetEccDeg = float.NaN, Censored = true });
+            }
+            block = s.ResolveEyeRange(plan, "measured");
+            Assert.AreEqual(30f, s.PawThetaDeg);
+            Assert.AreEqual("≥40°", block["a_shown"], "all censored");
+            Assert.AreEqual("≥40°", ((Dictionary<string, object>)((List<object>)block["per_direction"])[0])["shown"]);
+
+            // skipped or disabled: the default (15 deg, the paper's value), with the per-direction medians still listed
+            block = s.ResolveEyeRange(plan, "default_skipped");
+            Assert.AreEqual(15f, s.PawThetaDeg);
+            Assert.AreEqual("default_skipped", s.PawThetaSource);
+            Assert.IsNull(block["a_deg"]);
+            Assert.AreEqual(true, block["skipped"]);
+            Assert.AreEqual(40.0, (double)((Dictionary<string, object>)((List<object>)block["per_direction"])[0])["median_head_onset_ecc_deg"], 1e-6);
+            s.ResolveEyeRange(new EyeRangePlan(), "default_no_block");
+            Assert.AreEqual(15f, s.PawThetaDeg);
         }
 
         [Test]

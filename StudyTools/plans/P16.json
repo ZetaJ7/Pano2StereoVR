@@ -1,11 +1,11 @@
 {
-  "plan_format_version": 4,
+  "plan_format_version": 5,
   "study_id": "Pano2Stereo-E5",
   "config_version": "v3-draft-2026-11-19",
-  "config_sha256": "7caf166bb93e3d57069ea76733f35b2244815bd368621f2a5998cfa6c152fbc5",
+  "config_sha256": "c06b1339f1215001be8ef9d51f0473b8dd08ce89d8d6451201c4c65e54ff6e79",
   "participant_id": "P16",
   "seed": 224960524034961,
-  "generated_utc": "2026-11-19T11:02:38+00:00",
+  "generated_utc": "2026-11-20T07:11:40+00:00",
   "timing": {
     "clip_s": 10.0,
     "gap_between_ab_s": 1.5,
@@ -23,6 +23,7 @@
     "break",
     "ssq:S_mid2",
     "hmd_fit",
+    "eyerange",
     "gazetraining",
     "part:2",
     "ssq:S_post",
@@ -100,6 +101,122 @@
   "alignment": {
     "tolerance_deg": 5.0,
     "dwell_s": 1.0
+  },
+  "eye_range": {
+    "enabled": true,
+    "mode": "continuous",
+    "rule": "median_onset_ecc",
+    "measure": "head_rot_deg",
+    "directions_deg": [
+      0.0,
+      45.0,
+      90.0,
+      135.0,
+      180.0,
+      225.0,
+      270.0,
+      315.0
+    ],
+    "repeats": 2,
+    "speed_deg_s": 8.0,
+    "max_eccentricity_deg": 40.0,
+    "head_threshold_deg": 3.0,
+    "dot_size_deg": 1.5,
+    "align_dwell_s": 0.5,
+    "gap_s": 0.3,
+    "reference_yaw_deg": 0.0,
+    "reference_pitch_deg": 0.0,
+    "stop_at_onset": true,
+    "paw_theta_variants_deg": [
+      10.0,
+      15.0,
+      20.0,
+      25.0,
+      30.0
+    ],
+    "default_paw_theta_deg": 15.0,
+    "sweeps": [
+      {
+        "index": 0,
+        "direction_deg": 315.0,
+        "repeat": 1
+      },
+      {
+        "index": 1,
+        "direction_deg": 270.0,
+        "repeat": 1
+      },
+      {
+        "index": 2,
+        "direction_deg": 0.0,
+        "repeat": 1
+      },
+      {
+        "index": 3,
+        "direction_deg": 45.0,
+        "repeat": 0
+      },
+      {
+        "index": 4,
+        "direction_deg": 180.0,
+        "repeat": 0
+      },
+      {
+        "index": 5,
+        "direction_deg": 315.0,
+        "repeat": 0
+      },
+      {
+        "index": 6,
+        "direction_deg": 225.0,
+        "repeat": 1
+      },
+      {
+        "index": 7,
+        "direction_deg": 90.0,
+        "repeat": 0
+      },
+      {
+        "index": 8,
+        "direction_deg": 135.0,
+        "repeat": 0
+      },
+      {
+        "index": 9,
+        "direction_deg": 225.0,
+        "repeat": 0
+      },
+      {
+        "index": 10,
+        "direction_deg": 45.0,
+        "repeat": 1
+      },
+      {
+        "index": 11,
+        "direction_deg": 180.0,
+        "repeat": 1
+      },
+      {
+        "index": 12,
+        "direction_deg": 90.0,
+        "repeat": 1
+      },
+      {
+        "index": 13,
+        "direction_deg": 270.0,
+        "repeat": 0
+      },
+      {
+        "index": 14,
+        "direction_deg": 135.0,
+        "repeat": 1
+      },
+      {
+        "index": 15,
+        "direction_deg": 0.0,
+        "repeat": 0
+      }
+    ]
   },
   "gaze_training": {
     "enabled": true,
@@ -716,7 +833,7 @@
           "index": 0,
           "pair_type": "real",
           "file_a": "train_near__pa.mp4",
-          "file_b": "train_near__paw.mp4"
+          "file_b": "train_near__paw_t{paw_theta}.mp4"
         },
         {
           "block": "training",
@@ -727,8 +844,8 @@
           "reference_pitch_deg": 0.0,
           "index": 1,
           "pair_type": "same",
-          "file_a": "train_near__paw.mp4",
-          "file_b": "train_near__paw.mp4"
+          "file_a": "train_near__paw_t{paw_theta}.mp4",
+          "file_b": "train_near__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -742,7 +859,7 @@
           "index": 2,
           "pair_type": "real",
           "file_a": "near_E__pa.mp4",
-          "file_b": "near_E__paw.mp4"
+          "file_b": "near_E__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -755,8 +872,8 @@
           "scene": "indoor",
           "index": 3,
           "pair_type": "same",
-          "file_a": "near_B__paw.mp4",
-          "file_b": "near_B__paw.mp4"
+          "file_a": "near_B__paw_t{paw_theta}.mp4",
+          "file_b": "near_B__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -769,7 +886,7 @@
           "scene": "indoor",
           "index": 4,
           "pair_type": "real",
-          "file_a": "near_E__paw.mp4",
+          "file_a": "near_E__paw_t{paw_theta}.mp4",
           "file_b": "near_E__pa.mp4"
         },
         {
@@ -783,8 +900,8 @@
           "scene": "indoor",
           "index": 5,
           "pair_type": "same",
-          "file_a": "near_F__paw.mp4",
-          "file_b": "near_F__paw.mp4"
+          "file_a": "near_F__paw_t{paw_theta}.mp4",
+          "file_b": "near_F__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -798,7 +915,7 @@
           "index": 6,
           "pair_type": "real",
           "file_a": "near_D__pa.mp4",
-          "file_b": "near_D__paw.mp4"
+          "file_b": "near_D__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -811,7 +928,7 @@
           "scene": "indoor",
           "index": 7,
           "pair_type": "real",
-          "file_a": "near_C__paw.mp4",
+          "file_a": "near_C__paw_t{paw_theta}.mp4",
           "file_b": "near_C__pa.mp4"
         },
         {
@@ -839,7 +956,7 @@
           "scene": "indoor",
           "index": 9,
           "pair_type": "real",
-          "file_a": "near_D__paw.mp4",
+          "file_a": "near_D__paw_t{paw_theta}.mp4",
           "file_b": "near_D__pa.mp4"
         },
         {
@@ -853,7 +970,7 @@
           "scene": "indoor",
           "index": 10,
           "pair_type": "real",
-          "file_a": "near_B__paw.mp4",
+          "file_a": "near_B__paw_t{paw_theta}.mp4",
           "file_b": "near_B__pa.mp4"
         },
         {
@@ -882,7 +999,7 @@
           "index": 12,
           "pair_type": "real",
           "file_a": "near_A__pa.mp4",
-          "file_b": "near_A__paw.mp4"
+          "file_b": "near_A__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -896,7 +1013,7 @@
           "index": 13,
           "pair_type": "real",
           "file_a": "near_F__pa.mp4",
-          "file_b": "near_F__paw.mp4"
+          "file_b": "near_F__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -910,7 +1027,7 @@
           "index": 14,
           "pair_type": "real",
           "file_a": "near_C__pa.mp4",
-          "file_b": "near_C__paw.mp4"
+          "file_b": "near_C__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -923,8 +1040,8 @@
           "scene": "indoor",
           "index": 15,
           "pair_type": "same",
-          "file_a": "near_D__paw.mp4",
-          "file_b": "near_D__paw.mp4"
+          "file_a": "near_D__paw_t{paw_theta}.mp4",
+          "file_b": "near_D__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -938,7 +1055,7 @@
           "index": 16,
           "pair_type": "real",
           "file_a": "near_B__pa.mp4",
-          "file_b": "near_B__paw.mp4"
+          "file_b": "near_B__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -951,7 +1068,7 @@
           "scene": "indoor",
           "index": 17,
           "pair_type": "real",
-          "file_a": "near_F__paw.mp4",
+          "file_a": "near_F__paw_t{paw_theta}.mp4",
           "file_b": "near_F__pa.mp4"
         },
         {
@@ -965,7 +1082,7 @@
           "scene": "indoor",
           "index": 18,
           "pair_type": "real",
-          "file_a": "near_A__paw.mp4",
+          "file_a": "near_A__paw_t{paw_theta}.mp4",
           "file_b": "near_A__pa.mp4"
         },
         {

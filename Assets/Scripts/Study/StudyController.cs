@@ -13,7 +13,7 @@ namespace Pano2StereoVR.Study
     /// <summary>
     /// Subjective-study session runner. Builds the rig, panorama sphere, UI and video player at runtime,
     /// asks for the language, runs check-in, then executes the plan flow (SSQ, headset fitting, stereo test,
-    /// Part 1, SSQ, break, SSQ, headset re-fit, gaze training, Part 2, SSQ, post-questionnaire), writing every
+    /// Part 1, SSQ, break, SSQ, headset re-fit, natural viewing range, gaze training, Part 2, SSQ, post-questionnaire), writing every
     /// trial to the participant folder as soon as it ends. In QA mode the status bar offers skip controls. The end page offers Exit and Start next participant; the latter
     /// rebuilds the runtime objects in place and starts a fresh session (new folder, nothing carried over).
     /// The flow steps are in StudyController.Steps.cs.
@@ -45,6 +45,15 @@ namespace Pano2StereoVR.Study
         private GameObject _cueMarker;
         private GameObject _gazeRoot;
         private readonly List<Renderer> _gazeDots = new List<Renderer>();
+        private GameObject _eyeTarget;
+        private Material _eyeTargetMat;
+        private float _eyeRefYaw;
+        private float _eyeRefPitch;
+        private float _eyeDirDeg;
+        private float _eyeDotEccDeg;
+        private bool _eyeSweeping;
+        private Sprite _rangeRingSprite;
+        private GameObject _advanceIcon;
         private readonly List<UnityEngine.Object> _runtime = new List<UnityEngine.Object>();
         private Coroutine _run;
         private RectTransform _abortPanel;
@@ -81,6 +90,16 @@ namespace Pano2StereoVR.Study
         public bool CueVisible => _cueMarker != null && _cueMarker.activeSelf;
         public bool StereoQuadVisible => _rdsQuad != null && _rdsQuad.activeSelf;
         public bool GazeDotsVisible => _gazeRoot != null && _gazeRoot.activeSelf;
+        /// <summary>The natural-viewing-range dot is shown.</summary>
+        public bool EyeRangeTargetVisible => _eyeTarget != null && _eyeTarget.activeSelf;
+        /// <summary>A natural-viewing-range sweep is running (the dot moves outward).</summary>
+        public bool EyeRangeSweepActive => _eyeSweeping;
+        /// <summary>Current eccentricity of the sweeping dot (deg).</summary>
+        public float EyeRangeDotEccentricityDeg => _eyeDotEccDeg;
+        /// <summary>Part 2: the fast-forward icon (advancing allowed) is shown.</summary>
+        public bool AdvanceIconVisible => _advanceIcon != null && _advanceIcon.activeSelf;
+        /// <summary>PAw correction radius chosen for Part 2 (deg); below 0 until chosen.</summary>
+        public float PawThetaDeg => _s.PawThetaDeg;
         public bool AdvanceAvailable => _advanceArmed;
         public string SessionDirectory => _s.Log != null ? _s.Log.Directory : "";
         public string Language => _s.Language;
@@ -120,6 +139,26 @@ namespace Pano2StereoVR.Study
             {
                 _rig.SetDesktopView(_alignYaw + yawOffsetDeg, _alignPitch);
             }
+        }
+
+        /// <summary>
+        /// Desktop only: point the simulated head from the eye-range reference along the current sweep direction, at
+        /// the given eccentricity (deg). Used by the autopilot to let the head follow the dot.
+        /// </summary>
+        public void DesktopLookAlongEyeRangeSweep(float headEccDeg)
+        {
+            if (_rig != null && _eyeSweeping)
+            {
+                Vector3 dir = EyeRangeDirection(_eyeRefYaw, _eyeRefPitch, _eyeDirDeg, headEccDeg);
+                _rig.SetDesktopView(Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg, Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg);
+            }
+        }
+
+        /// <summary>Direction at eccentricity eccDeg along directionDeg (0 = up, clockwise for the viewer) around a reference.</summary>
+        private static Vector3 EyeRangeDirection(float refYaw, float refPitch, float directionDeg, float eccDeg)
+        {
+            Vector3 local = Quaternion.AngleAxis(-directionDeg, Vector3.forward) * (Quaternion.AngleAxis(-eccDeg, Vector3.right) * Vector3.forward);
+            return Quaternion.Euler(-refPitch, refYaw, 0f) * local;
         }
 
         private bool Interrupted => _skipGroup || _skipPart;
@@ -326,6 +365,11 @@ namespace Pano2StereoVR.Study
             _rdsTex = null;
             _cueMarker = null;
             _gazeRoot = null;
+            _eyeTarget = null;
+            _eyeTargetMat = null;
+            _eyeSweeping = false;
+            _rangeRingSprite = null;
+            _advanceIcon = null;
             _abortPanel = null;
             _abortReason = null;
             _exitConfirmRow = null;
@@ -478,6 +522,9 @@ namespace Pano2StereoVR.Study
                         break;
                     case FlowStepKind.StereoTest:
                         yield return StereoTestStep();
+                        break;
+                    case FlowStepKind.EyeRange:
+                        yield return EyeRangeStep();
                         break;
                     case FlowStepKind.GazeTraining:
                         yield return GazeTrainingStep();
@@ -653,10 +700,21 @@ namespace Pano2StereoVR.Study
                 });
             }
             GazeTrainingPlan g = p.GazeTraining;
+            EyeRangePlan er = p.EyeRange;
             return new Dictionary<string, object>
             {
                 { "flow", p.FlowRaw.Cast<object>().ToList() },
                 { "stereotest_trials", p.StereoTest.Enabled ? p.StereoTest.Trials.Count : 0 },
+                { "eye_range", new Dictionary<string, object>
+                    {
+                        { "present", er.Present }, { "enabled", er.Enabled }, { "mode", er.Mode }, { "n_sweeps", er.Sweeps.Count },
+                        { "directions_deg", er.DirectionsDeg.Select(x => (object)(double)x).ToList() }, { "repeats", er.Repeats },
+                        { "speed_deg_s", Round(er.SpeedDegPerSecond) }, { "max_eccentricity_deg", Round(er.MaxEccentricityDeg) },
+                        { "rule", er.Rule }, { "measure", er.Measure }, { "head_threshold_deg", Round(er.HeadThresholdDeg) },
+                        { "paw_theta_variants_deg", er.PawThetaVariantsDeg.Select(x => (object)(double)x).ToList() },
+                        { "default_paw_theta_deg", Round(er.DefaultPawThetaDeg) },
+                    }
+                },
                 { "gaze_training", new Dictionary<string, object>
                     {
                         { "enabled", g.Enabled }, { "n_dots", g.DotCount }, { "radius_deg", Round(g.RadiusDeg) },
@@ -764,6 +822,7 @@ namespace Pano2StereoVR.Study
             _colorMat.SetColor("_Color", StudyTheme.CueYellow);
             _cueMarker.SetActive(false);
             HideGazeDots();
+            HideEyeTarget();
             _s.Step = status;
             _s.TrialLabel = "";
             BuildEndPage(status);
@@ -784,6 +843,11 @@ namespace Pano2StereoVR.Study
                 if (_s.GazeAttempts.Count > 0)
                 {
                     _s.Session["gaze_training"] = _s.GazeSummary();
+                }
+                if (_s.EyeRangeSweeps.Count > 0 && !_s.Session.ContainsKey("eye_range"))
+                {
+                    // aborted during the natural viewing range measurement: keep the medians, no radius was measured
+                    _s.Session["eye_range"] = _s.ResolveEyeRange(_s.Plan.EyeRange, "aborted");
                 }
                 LogEvent("session_end", status + (string.IsNullOrEmpty(reason) ? "" : ": " + reason));
                 try

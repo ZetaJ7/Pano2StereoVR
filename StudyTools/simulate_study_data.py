@@ -52,7 +52,8 @@ HEADERS = {
                            "head_rot_deg", "head_rot_along_deg"],
     "gazetraining.csv": ["participant_id", "attempt", "position", "dot_id", "dot_angle_deg", "dwell_s", "max_dev_deg",
                          "attempt_max_dev_deg", "threshold_deg", "attempt_passed"],
-    "headpose.csv": ["participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg"],
+    "headpose.csv": ["participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg",
+                     "content_yaw_offset_deg"],
     "playback.csv": ["participant_id", "part", "trial_index", "segment", "file", "frames_expected", "frames_shown",
                      "frames_dropped", "dt_mean_ms", "dt_p99_ms"],
 }
@@ -285,7 +286,8 @@ def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, inc
             for k in range(0, 300, 3):
                 yaw, pitch = round(rng.gauss(0, 2.5), 2), round(rng.gauss(0, 2.0), 2)
                 m = max(m, (yaw ** 2 + pitch ** 2) ** 0.5)
-                hp_rows.append([pid, 2, t["index"], seg, round(k / 30.0, 3), k, yaw, pitch, round(rng.gauss(0, 1.0), 2)])
+                hp_rows.append([pid, 2, t["index"], seg, round(k / 30.0, 3), k, yaw, pitch, round(rng.gauss(0, 1.0), 2),
+                                t.get("reference_yaw_deg", 0.0)])
             seg_max[seg] = round(m, 2)
             pb_rows.append([pid, 2, t["index"], seg, resolve_theta(t["file_a"] if seg == "A" else t["file_b"], theta), 300, 300,
                             rng.choice([0, 0, 0, 2]), 33.3, 34.5])

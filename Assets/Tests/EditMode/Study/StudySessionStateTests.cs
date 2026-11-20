@@ -182,6 +182,30 @@ namespace Pano2StereoVR.Study.Tests
         }
 
         [Test]
+        public void Part2ContentRotationShowsTheReferenceAtTheSetForward()
+        {
+            // user 11-20: the sphere is turned by -ref about Y; world forward then samples ERP yaw ref
+            UnityEngine.Vector3 c = StudyRig.WorldToContent(new UnityEngine.Vector3(0f, 0f, 1f), -120f);
+            Assert.AreEqual(-120.0, Math.Atan2(c.x, c.z) * 180.0 / Math.PI, 1e-3);
+            Assert.AreEqual(0f, c.y, 1e-6f, "yaw only: no pitch");
+            c = StudyRig.WorldToContent(new UnityEngine.Vector3(0f, 0f, 1f), 60f);
+            Assert.AreEqual(60.0, Math.Atan2(c.x, c.z) * 180.0 / Math.PI, 1e-3);
+            // a world direction 30 deg to the right shows ERP yaw ref + 30
+            float r = 30f * (float)Math.PI / 180f;
+            c = StudyRig.WorldToContent(new UnityEngine.Vector3((float)Math.Sin(r), 0f, (float)Math.Cos(r)), -60f);
+            Assert.AreEqual(-30.0, Math.Atan2(c.x, c.z) * 180.0 / Math.PI, 1e-3);
+            UnityEngine.Quaternion id = StudyRig.ContentYawRotation(0f);
+            Assert.AreEqual(1f, id.w, 1e-6f);
+            Assert.AreEqual(0f, id.y, 1e-6f);
+
+            // logged head yaw in ERP coordinates (world yaw + offset), wrapped
+            Assert.AreEqual(-50f, StudyRig.ErpYaw(70f, -120f), 1e-4f);
+            Assert.AreEqual(-170f, StudyRig.ErpYaw(-50f, -120f), 1e-4f);
+            Assert.AreEqual(170f, StudyRig.ErpYaw(-130f, -60f) + 0f, 1e-4f, "-190 wraps to +170");
+            Assert.AreEqual(10f, StudyRig.ErpYaw(10f, 0f), 1e-4f, "no offset outside Part 2");
+        }
+
+        [Test]
         public void RatingRecordKeepsTheInitialAnswerAndCountsRevisions()
         {
             var r = new RatingRecord();

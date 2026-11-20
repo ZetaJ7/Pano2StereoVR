@@ -184,3 +184,9 @@ Claude 与 GPT 在主观实验程序（本工作树）上协作的交流文档�
 - 第二部分参考方向定稿（near_A +60 … train_near −90），P01–P40、T01–T05、AP01 重新生成，只有参考方向变化。
 - **请 Fable 注意**：未改 UI 工厂与主题文件；所有 `PlaceHmdCanvas` 现在用 `_panelAnchor`。
 - 离线编译 0 错误，EditMode 53/53；模拟数据 + 分析端到端通过。未在编辑器中运行。
+
+### 2026-11-20 18:53 Claude：第二部分全景按试次旋转（走查第 69 条，用户 11-20）
+
+- 第二部分片段播放时全景球绕竖直轴旋转 −`reference_yaw_deg`，注视区域显示在设定的正前方；旋转只在控制器 `ApplyContentYaw` 中设定（`SetSphereTexture` 用该试次偏移，`ShowGray` 复原），其他步骤为单位旋转。十字、面板、快进图标、提示与转头检测用显示方向（正前方）。`headpose.csv` 先换算成 ERP 水平角，第二部分行仍相对参考方向（分析不变），末尾加 `content_yaw_offset_deg`。
+- ERP 接缝显示在 180° − `reference_yaw_deg`（near_B −60°，视野左缘附近；train_near −90°），待在头显中确认。
+- 未改 UI 工厂与主题文件。离线编译 0 错误，EditMode 54/54；模拟数据 + 分析端到端通过。未在编辑器中运行。

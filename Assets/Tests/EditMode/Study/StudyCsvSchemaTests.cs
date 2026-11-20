@@ -20,7 +20,7 @@ namespace Pano2StereoVR.Study.Tests
             { "eyerange_trace.csv", new[] { "participant_id", "sweep", "direction_deg", "repeat", "t_s", "dot_ecc_deg", "head_yaw_deg", "head_pitch_deg", "head_rot_deg", "head_rot_along_deg" } },
             { "gazetraining.csv", new[] { "participant_id", "attempt", "position", "dot_id", "dot_angle_deg", "dwell_s", "max_dev_deg", "attempt_max_dev_deg", "threshold_deg", "attempt_passed" } },
             { "ssq.csv", new[] { "participant_id", "measurement", "GD", "FA", "HE", "ES", "DF", "IS", "SW", "NA", "CO", "FH", "BV", "DO", "DC", "VE", "SA", "BU" } },
-            { "headpose.csv", new[] { "participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg" } },
+            { "headpose.csv", new[] { "participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg", "content_yaw_offset_deg" } },
             { "playback.csv", new[] { "participant_id", "part", "trial_index", "segment", "file", "frames_expected", "frames_shown", "frames_dropped", "dt_mean_ms", "dt_p99_ms" } },
         };
 

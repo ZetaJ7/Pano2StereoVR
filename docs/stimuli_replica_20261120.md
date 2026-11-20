@@ -15,7 +15,7 @@
 | `part1/real_outdoor/_pending_window/` | CoE s1550、Parking s1110 停车段的 mono/ours/deepsynthesis（共 6 个，未选用） | 留待清理 |
 | `part1/practice/` | `train_outdoor__mono.mp4`（PAIR360 PhysEd s280 有运动窗口，插帧 300 帧） | 完成 |
 | `part1/virtual_indoor/`、`part1/dummy/` | vin_A–C、dummy_indoor × 4 条件，共 16 个，按用户选的偏移编码（vin_A、dummy = 路径朝向均值；vin_B、vin_C = 第 0 帧朝向） | 16 个，全部完成 |
-| `part2/near/`、`part2/practice/`、`part1/practice/train_indoor__ours.mp4` | 正式组（用户 18:40）：near_A–F 与 train_near 各 6 个（PA + PAw θ 10–30°），train_indoor 1 个（PA）；明细见第 5 节 | 18:25 开始，预计 19:50 前后全部完成 |
+| `part2/near/`、`part2/practice/`、`part1/practice/train_indoor__ours.mp4` | 正式组（用户 18:40）：near_A–F 与 train_near 各 6 个（PA + PAw θ 10–30°），train_indoor 1 个（PA）；明细见第 5 节 | 已全部完成（19:57）：43 个文件 |
 | `part2/_alternates/` | 备用组（17:25）18 个：`near_A_ref0__*`（hotel_0，0°）、`near_C_room1_refm60__*`、`near_D_room2_ref30__*` | 已完成，保留作备选 |
 
 新 Replica 候选（只有 rgb 与 depth，供用户挑第二部分与练习片段）都是 4K 5768×2884、300 帧、25 fps、固定朝向，位于 173 `/mnt/disk4/Pano2stereo_r1/E5_stimuli_work/Replica_gen/run_e5_stdtest_native_4k_fixedheading_20261120/`：
@@ -87,16 +87,20 @@ content yaw 向右为正，0 为 ERP 中心，即片段的固定朝向（near_A 
 
 | clip | 来源（帧） | 固定朝向（habitat 世界 yaw，rad） | 参考方向 | 标定（论文方法，逐条） |
 | --- | --- | --- | --- | --- |
-| near_A | hotel_0 seq_000（0–299），渲染前输入去转向 | 第 0 帧朝向（−0.0866） | +60° | 论文表 III（`hotel_0_seed_300`） |
-| near_B | hotel_0 seq_008 seed 3300（200–499） | −1.3305（窗口路径朝向均值） | −120° | `calib_e5/fits/hotel_0_seed_3300.json` |
-| near_C | office_0 seq_002 seed 900（75–374） | 2.5235（均值） | −60° | `office_0_seed_900.json` |
-| near_D | office_0 seq_011 seed 3600（100–399） | −1.4525（均值） | +30° | `office_0_seed_3600.json` |
-| near_E | hotel_0 seq_007 seed 2400（0–299） | −1.5616（起点） | −30° | `hotel_0_seed_2400.json` |
-| near_F | apartment_0 seq_007 seed 2400（0–299） | 2.9998（起点） | −30° | `apartment_0_seed_2400.json` |
-| train_near | apartment_0 seq_003 seed 1200（175–474） | 0.9291（起点） | −90° | `apartment_0_seed_1200.json` |
-| train_indoor（第一部分练习，只有 PA） | room_0 seq_003 seed 1200（25–324） | 1.4983（起点） | — | `room_0_seed_1200.json` |
+| near_A | hotel_0 seq_000（0–299），渲染前输入去转向 | 第 0 帧朝向（−0.0866） | +60° | 论文表 III（`hotel_0_seed_300`）：1.1695 / −0.2948 |
+| near_B | hotel_0 seq_008 seed 3300（200–499） | −1.3305（窗口路径朝向均值） | −120° | `calib_e5/fits/hotel_0_seed_3300.json`：1.0918 / −0.2363 |
+| near_C | office_0 seq_002 seed 900（75–374） | 2.5235（均值） | −60° | `office_0_seed_900.json`：1.2419 / −0.3496 |
+| near_D | office_0 seq_011 seed 3600（100–399） | −1.4525（均值） | +30° | `office_0_seed_3600.json`：1.1401 / −0.2401 |
+| near_E | hotel_0 seq_007 seed 2400（0–299） | −1.5616（起点） | −30° | `hotel_0_seed_2400.json`：1.0992 / −0.2401 |
+| near_F | apartment_0 seq_007 seed 2400（0–299） | 2.9998（起点） | −30° | `apartment_0_seed_2400.json`：1.1502 / −0.3080 |
+| train_near | apartment_0 seq_003 seed 1200（175–474） | 0.9291（起点） | −90° | `apartment_0_seed_1200.json`：1.1288 / −0.3163 |
+| train_indoor（第一部分练习，只有 PA） | room_0 seq_003 seed 1200（25–324） | 1.4983（起点） | — | `room_0_seed_1200.json`：1.0473 / −0.2088 |
+
+标定列为 exponent / log_scale。每条都按论文方法拟合：300 帧，约 284 万个采样像素，与论文 Replica 的拟合规模相同。
 
 研究配置中的 `part2.clips[].reference_yaw_deg` 应改为上表的参考方向，train_near 为 −90，由主会话更新。
+
+核对：42 个第二部分文件和 train_indoor 都是 5768×5768、300 帧、25 fps。PAw 渲染日志中的 e_th 与 gaze_forward_unit 都与设定一致。near_B 的参考方向是 −120°，gaze_forward_unit 以负号开头，第一次运行时被 argparse 当成选项，5 个 PAw 任务失败。改用 `--gaze-forward-unit=<u>` 后已重跑（`run_part2_nearB_fix.sh`），其他片段不受影响。
 
 ## 6. 前方视野
 

@@ -1206,10 +1206,10 @@ namespace Pano2StereoVR.Study
                 float outDeg = 0f;
                 var stats = new PlaybackStats();
                 var rows = new List<object[]>();
-                PlayRequest req = MakeRequest(o, false, t.ReferenceYawDeg, (ts, frame) =>
+                PlayRequest req = MakeRequest(o, false, DisplayYaw(t), (ts, frame) =>
                 {
-                    rows.Add(HeadRow(2, t.Index, seg, ts, frame, t.ReferenceYawDeg, t.ReferencePitchDeg));
-                    float dev = HeadDeviation(t.ReferenceYawDeg, t.ReferencePitchDeg);
+                    rows.Add(HeadRow(2, t.Index, seg, ts, frame, t.ReferenceYawDeg, t.ReferencePitchDeg)); // logged in ERP yaw
+                    float dev = HeadDeviation(DisplayYaw(t), t.ReferencePitchDeg); // displayed reference (the set forward)
                     max = Mathf.Max(max, dev);
                     if (check && dev > threshold && !headOut && !StaffDialogOpen)
                     {
@@ -1226,7 +1226,7 @@ namespace Pano2StereoVR.Study
                     fullViewed = true;
                     allowed?.Invoke();
                     // user 11-20: a small fast-forward icon where the cross was, no text (hidden by StopAdvance)
-                    ShowAdvanceIcon(t.ReferenceYawDeg, t.ReferencePitchDeg);
+                    ShowAdvanceIcon(DisplayYaw(t), t.ReferencePitchDeg);
                     LogEvent("part2_advance_cue", "trial " + t.Index + " segment " + seg);
                 };
                 yield return _clips.Play(s, req, stats);
@@ -1311,7 +1311,7 @@ namespace Pano2StereoVR.Study
                     yield break;
                 }
                 yield return _clips.WaitPrepared(s, PrepareTimeoutSeconds);
-                yield return AlignToReference(t.ReferenceYawDeg, t.ReferencePitchDeg,
+                yield return AlignToReference(DisplayYaw(t), t.ReferencePitchDeg,
                     (t.IsMain ? "" : StudyMarkup.Em(T("practice_label")) + "  ") + StudyMarkup.Em(T(labelKey)) + "  " + T("part2_cue"),
                     -0.42f, (a, d) => { });
                 if (Interrupted)
@@ -1369,8 +1369,11 @@ namespace Pano2StereoVR.Study
                 _skipGroup = false;
                 _s.TrialLabel = (i + 1) + "/" + trials.Count + " " + t.Block + " " + t.ClipId + " " + t.CondA + "-" + t.CondB;
                 SetStaffScope(true); // user 11-20: F8 skips the whole trial (both segments and the questions)
-                // user 11-20: the in-trial panels (head-turn prompts, choices, questions) sit at the trial's reference direction
-                _panelAnchor = Quaternion.Euler(-t.ReferencePitchDeg, t.ReferenceYawDeg, 0f) * Vector3.forward;
+                // user 11-20: the panorama turns so the trial's fixation region (reference_yaw_deg, ERP yaw) appears at the set
+                // forward while its clips play; the cross, panels, hints, icon and head checks use the displayed yaw (0)
+                _trialYawOffset = t.ReferenceYawDeg;
+                // the in-trial panels (head-turn prompts, choices, questions) sit at the displayed reference direction
+                _panelAnchor = Quaternion.Euler(-t.ReferencePitchDeg, DisplayYaw(t), 0f) * Vector3.forward;
                 var head = new List<object[]>();
                 var statsA = new PlaybackStats();
                 var statsB = new PlaybackStats();
@@ -1382,7 +1385,7 @@ namespace Pano2StereoVR.Study
                 ShowGray();
                 _recenterLocked = true; // user 11-19: no manual recenter from the alignment to the end of the second clip
                 float alignS = 0f, startDev = 0f;
-                yield return AlignToReference(t.ReferenceYawDeg, t.ReferencePitchDeg,
+                yield return AlignToReference(DisplayYaw(t), t.ReferencePitchDeg,
                     (t.IsMain ? "" : StudyMarkup.Em(T("practice_label")) + "  ") + StudyMarkup.Em(T("segment_first")) + "  " + T("part2_cue"),
                     -0.42f, (a, d) => { alignS = a; startDev = d; });
                 bool playedA = false, playedB = false;
@@ -1469,9 +1472,13 @@ namespace Pano2StereoVR.Study
                     _s.Part2TrialsDone++;
                 }
                 _panelAnchor = Vector3.forward;
+                _trialYawOffset = 0f;
+                ShowGray();
                 yield return Wait(tm.GrayBetweenTrialsSeconds);
             }
             _panelAnchor = Vector3.forward;
+            _trialYawOffset = 0f;
+            ShowGray();
             _s.TrialLabel = "";
         }
 

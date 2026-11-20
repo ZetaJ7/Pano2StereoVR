@@ -73,6 +73,13 @@ namespace Pano2StereoVR.Study
         private bool _dialogYawOnly;
         /// <summary>Direction the headset panels are anchored to: the set forward (content yaw 0, pitch 0), or a Part 2 trial's reference.</summary>
         private Vector3 _panelAnchor = new Vector3(0f, 0f, 1f);
+        // Part 2 content rotation (user 11-20): the panorama sphere is turned so the trial's fixation region
+        // (reference_yaw_deg, ERP yaw) appears at the set forward; owned here only (the rig moves the sphere position only)
+        private Transform _sphere;
+        /// <summary>Content (ERP) yaw shown at world yaw 0 right now (sphere rotation); 0 = identity.</summary>
+        private float _contentYawOffset;
+        /// <summary>Content yaw the current Part 2 trial shows at world yaw 0 while its clips play; 0 outside Part 2 trials.</summary>
+        private float _trialYawOffset;
         private readonly List<UnityEngine.Object> _runtime = new List<UnityEngine.Object>();
         private Coroutine _run;
         private RectTransform _abortPanel;
@@ -337,6 +344,9 @@ namespace Pano2StereoVR.Study
             _sphereMat = Track(new Material(SphereShader));
             sphere.GetComponent<Renderer>().sharedMaterial = _sphereMat;
             _rig.Initialize(cam, sphere.transform);
+            _sphere = sphere.transform;
+            _trialYawOffset = 0f;
+            ApplyContentYaw(0f);
             ShowGray();
 
             _colorMat = Track(new Material(ColorShader));
@@ -465,6 +475,9 @@ namespace Pano2StereoVR.Study
             _forwardSets = 0;
             _dialogIsRecenter = false;
             _panelAnchor = Vector3.forward;
+            _sphere = null;
+            _contentYawOffset = 0f;
+            _trialYawOffset = 0f;
             _abortPanel = null;
             _abortReason = null;
             _exitConfirmRow = null;
@@ -1136,6 +1149,8 @@ namespace Pano2StereoVR.Study
             HideEyeTarget();
             _panelAnchor = Vector3.forward;
             _hmdFitActive = false;
+            _trialYawOffset = 0f;
+            ApplyContentYaw(0f);
             _s.Step = status;
             _s.TrialLabel = "";
             BuildEndPage(status);
@@ -1384,29 +1399,62 @@ namespace Pano2StereoVR.Study
             return StudyDataLogger.StimulusFullPath(_settings.StimuliDir, file);
         }
 
+        /// <summary>Show a clip; in a Part 2 trial the sphere is turned so the trial's reference appears at the set forward.</summary>
         private void SetSphereTexture(Texture tex)
         {
             _sphereMat.SetTexture("_MainTex", tex);
             _sphereMat.SetFloat("_UseGray", 0f);
+            ApplyContentYaw(_trialYawOffset);
         }
 
+        /// <summary>Gray screen; the sphere rotation goes back to identity.</summary>
         private void ShowGray()
         {
             if (_sphereMat != null)
             {
                 _sphereMat.SetFloat("_UseGray", 1f);
             }
+            ApplyContentYaw(0f);
         }
 
+        /// <summary>
+        /// The only place that sets the panorama sphere rotation (user 11-20): yaw-only, content (ERP) yaw
+        /// <paramref name="contentYawDeg"/> at world yaw 0. Identity everywhere except while a Part 2 clip is shown.
+        /// </summary>
+        private void ApplyContentYaw(float contentYawDeg)
+        {
+            _contentYawOffset = contentYawDeg;
+            if (_sphere != null)
+            {
+                _sphere.rotation = StudyRig.ContentYawRotation(contentYawDeg);
+            }
+        }
+
+        /// <summary>
+        /// Displayed (world) yaw of a Part 2 trial's reference: 0 (the set forward) while the trial's content rotation
+        /// applies, because the sphere shows reference_yaw_deg there. Used for the cross, panels, hints, the advance icon
+        /// and the head-turn checks.
+        /// </summary>
+        private float DisplayYaw(StudyTrial t)
+        {
+            return StudyRig.WrapDegrees(t.ReferenceYawDeg - _trialYawOffset);
+        }
+
+        /// <summary>
+        /// headpose.csv row. The head yaw is first converted to content (ERP) yaw (world yaw + the applied content yaw
+        /// offset, user 11-20); Part 2 rows are then relative to the trial's reference (refYaw in ERP yaw), as before,
+        /// so the analysis is unchanged. content_yaw_offset_deg is the applied offset (0 outside Part 2).
+        /// </summary>
         private object[] HeadRow(int part, int trialIndex, string segment, float t, long frame, float refYaw, float refPitch)
         {
             _rig.HeadAngles(out float yaw, out float pitch, out float roll);
+            yaw = StudyRig.ErpYaw(yaw, _contentYawOffset);
             if (part == 2)
             {
                 yaw = StudyRig.WrapDegrees(yaw - refYaw);
                 pitch -= refPitch;
             }
-            return new object[] { _s.Plan.ParticipantId, part, trialIndex, segment, t, frame, yaw, pitch, roll };
+            return new object[] { _s.Plan.ParticipantId, part, trialIndex, segment, t, frame, yaw, pitch, roll, Round(_contentYawOffset, 2) };
         }
 
         /// <summary>Head deviation (deg) from a reference direction given in content yaw/pitch.</summary>

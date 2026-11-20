@@ -207,6 +207,30 @@ namespace Pano2StereoVR.Study
 
         public Vector3 HeadPosition => Camera != null ? Camera.transform.position : Vector3.zero;
 
+        /// <summary>
+        /// Rotation of the panorama sphere that shows content (ERP) yaw <paramref name="contentYawDeg"/> at world yaw 0
+        /// (the set forward): a yaw-only rotation by -contentYawDeg (user 11-20, Part 2). Built from its components, so
+        /// it needs no engine call. A yaw-only rotation keeps the top-bottom stereo correct.
+        /// </summary>
+        public static Quaternion ContentYawRotation(float contentYawDeg)
+        {
+            float half = -0.5f * contentYawDeg * Mathf.Deg2Rad;
+            return new Quaternion(0f, Mathf.Sin(half), 0f, Mathf.Cos(half));
+        }
+
+        /// <summary>A world direction in the sphere's object space (what StudyStereoTB samples) for that rotation.</summary>
+        public static Vector3 WorldToContent(Vector3 world, float contentYawDeg)
+        {
+            Quaternion q = ContentYawRotation(contentYawDeg);
+            return new Quaternion(-q.x, -q.y, -q.z, q.w) * world;
+        }
+
+        /// <summary>Content (ERP) yaw of a world head yaw when the sphere shows content yaw offset at world yaw 0.</summary>
+        public static float ErpYaw(float worldYawDeg, float contentYawOffsetDeg)
+        {
+            return WrapDegrees(worldYawDeg + contentYawOffsetDeg);
+        }
+
         public static float WrapDegrees(float a)
         {
             a %= 360f;

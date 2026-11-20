@@ -76,7 +76,7 @@ namespace Pano2StereoVR.Study
         public static readonly string[] Ssq = new[] { "participant_id", "measurement" }.Concat(SsqItems).ToArray();
 
         public static readonly string[] HeadPose =
-            { "participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg" };
+            { "participant_id", "part", "trial_index", "segment", "t_s", "video_frame", "yaw_deg", "pitch_deg", "roll_deg", "content_yaw_offset_deg" };
 
         public static readonly string[] Playback =
         {

@@ -164,10 +164,30 @@ namespace Pano2StereoVR.Study.Tests
         }
 
         [Test]
+        public void RecenterAnglesComeFromTheHeadDirection()
+        {
+            // user 11-20: R maps the head yaw and pitch to content 0 / 0; the angles are taken from the forward vector
+            StudyRig.YawPitchOf(new UnityEngine.Vector3(0f, 0f, 1f), out float yaw, out float pitch);
+            Assert.AreEqual(0f, yaw, 1e-5f);
+            Assert.AreEqual(0f, pitch, 1e-5f);
+            StudyRig.YawPitchOf(new UnityEngine.Vector3(1f, 0f, 1f), out yaw, out pitch);
+            Assert.AreEqual(45f, yaw, 1e-4f);
+            Assert.AreEqual(0f, pitch, 1e-4f);
+            float p = 12f * (float)Math.PI / 180f;
+            StudyRig.YawPitchOf(new UnityEngine.Vector3(0f, (float)Math.Sin(p), (float)Math.Cos(p)) * 3f, out yaw, out pitch);
+            Assert.AreEqual(12f, pitch, 1e-3f, "pitch + = up, independent of the vector length");
+            StudyRig.YawPitchOf(new UnityEngine.Vector3(-1f, 0f, 0f), out yaw, out _);
+            Assert.AreEqual(-90f, yaw, 1e-4f);
+            Assert.AreEqual(2, Enum.GetValues(typeof(RecenterMode)).Length, "R and Shift+R only; no automatic recenter (user 11-20)");
+        }
+
+        [Test]
         public void RatingRecordKeepsTheInitialAnswerAndCountsRevisions()
         {
             var r = new RatingRecord();
             Assert.IsFalse(r.Rated);
+            Assert.AreEqual("", r.SkipReason);
+            Assert.IsFalse(r.StaffSkipped);
             r.SetInitial(4, 3, 5);
             Assert.IsTrue(r.Rated);
             Assert.AreEqual(0, r.Revisions);

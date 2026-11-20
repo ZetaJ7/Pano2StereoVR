@@ -23,8 +23,12 @@ namespace Pano2StereoVR.Study
         /// <summary>Replays from the group summary, in total and since the last rating.</summary>
         public int Replays;
         public int ReplaysSinceRating;
-        /// <summary>QA skip: the trial (or its group) was abandoned; excluded from the analysis.</summary>
+        /// <summary>QA skip (the trial or its group was abandoned) or staff skip (F8, this clip only); excluded from the analysis.</summary>
         public bool Skipped;
+        /// <summary>"staff" (F8, user 11-20), "qa" or "" when not skipped.</summary>
+        public string SkipReason = "";
+
+        public bool StaffSkipped => SkipReason == "staff";
 
         public bool Rated => Depth > 0 && Comfort > 0 && Artifact > 0;
 

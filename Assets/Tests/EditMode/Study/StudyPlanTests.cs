@@ -346,6 +346,17 @@ namespace Pano2StereoVR.Study.Tests
             Assert.IsTrue(files.Contains("part1/practice/train_indoor__ours.mp4") && files.Contains("part1/dummy/dummy_indoor__mono.mp4"));
             Assert.IsFalse(files.Any(f => f.Contains("{") || f.Contains("\\")));
 
+            // Part 2 reference directions (user 11-20)
+            var refs = new Dictionary<string, float>
+            {
+                { "near_A", 60f }, { "near_B", -120f }, { "near_C", -60f }, { "near_D", 30f }, { "near_E", -30f }, { "near_F", -30f }, { "train_near", -90f },
+            };
+            foreach (StudyTrial t in part2.Trials)
+            {
+                Assert.AreEqual(refs[t.ClipId], t.ReferenceYawDeg, t.ClipId);
+                Assert.AreEqual(0f, t.ReferencePitchDeg, t.ClipId);
+            }
+
             // Part 2: the same clip never appears in two consecutive main trials
             var main2 = part2.Trials.Where(t => t.IsMain).ToList();
             for (int i = 1; i < main2.Count; i++)

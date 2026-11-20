@@ -234,7 +234,7 @@
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": 60.0,
         "reference_pitch_deg": 0.0
       },
       {
@@ -242,7 +242,7 @@
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": -120.0,
         "reference_pitch_deg": 0.0
       },
       {
@@ -250,7 +250,7 @@
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": -60.0,
         "reference_pitch_deg": 0.0
       },
       {
@@ -258,7 +258,7 @@
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": 30.0,
         "reference_pitch_deg": 0.0
       },
       {
@@ -266,7 +266,7 @@
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": -30.0,
         "reference_pitch_deg": 0.0
       },
       {
@@ -274,7 +274,7 @@
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": -30.0,
         "reference_pitch_deg": 0.0
       }
     ],
@@ -283,14 +283,14 @@
         "clip_id": "train_near",
         "cond_a": "pa",
         "cond_b": "paw",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": -90.0,
         "reference_pitch_deg": 0.0
       },
       {
         "clip_id": "train_near",
         "cond_a": "paw",
         "cond_b": "paw",
-        "reference_yaw_deg": 0.0,
+        "reference_yaw_deg": -90.0,
         "reference_pitch_deg": 0.0
       }
     ],
@@ -299,7 +299,8 @@
       "min_view_s": null,
       "max_view_s": 0,
       "note": "片段播完一遍后循环，被试按扳机或空格进入下一段；min_view_s null = 一遍，max_view_s 0 = 不限；待用户确认"
-    }
+    },
+    "reference_note": "参考方向（用户 11-20 定稿）：内容水平角，右为正，0 = 片段正前方，俯仰均为 0；near_A +60、near_B −120、near_C −60、near_D +30、near_E −30、near_F −30、train_near −90。片段来源见 docs/stimulus_plan_20261119.md 第 11 节"
   },
   "pending_user_decision": {
     "note": "以下默认值待用户确认（11-19 走查后加入；程序只读取数值，不含任何通过或剔除规则）",

@@ -25,7 +25,7 @@ namespace Pano2StereoVR.Study
         {
             "participant_id", "block", "trial_index", "group_index", "position_in_group", "clip_id", "condition", "repetition",
             "depth_quality", "visual_comfort", "artifact_annoyance", "rt_depth_s", "rt_comfort_s", "rt_artifact_s",
-            "initial_depth", "initial_comfort", "initial_artifact", "revisions", "view_s", "loops", "replays", "skipped",
+            "initial_depth", "initial_comfort", "initial_artifact", "revisions", "view_s", "loops", "replays", "skipped", "skip_reason",
         };
 
         public static readonly string[] Part1Revisions =
@@ -45,7 +45,7 @@ namespace Pano2StereoVR.Study
             "participant_id", "block", "trial_index", "clip_id", "cond_a", "cond_b", "pair_type",
             "different", "preference", "rt_q1_s", "rt_q2_s", "view_a_s", "view_b_s", "loops_a", "loops_b",
             "max_dev_a_deg", "max_dev_b_deg", "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b",
-            "paw_theta_deg", "skipped",
+            "paw_theta_deg", "skipped", "skip_reason",
         };
 
         /// <summary>

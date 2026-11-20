@@ -125,3 +125,28 @@ Stimuli/
   part2/practice/        train_near__pa.mp4、train_near__paw_t<θ>.mp4
   part2/near/            near_*__pa.mp4、near_*__paw_t<θ>.mp4
 ```
+
+## 10. 备用数据集（用户 11-20 记录，暂不使用）
+
+如果 Replica 片段不够用，可以改用 Blender rich_scenes_v3（用户 11-20：“实在不行启用Blender数据集”）：
+- 位置：173 `/mnt/nvme1/PanoDepthDynamicLUT/data/virtual_scenes/blender/rich_scenes_v3/`。
+- 场景索引：`scene_index.json`，共 8 个场景，包括 apartment、studio、bedroom、cafe、gallery 等。
+- 每个 capture 的帧：`capture_*/shared/<sequence>/frame_NNNN/target/rgb.png` 与 `depth_mm.png`。
+- 用法：见各 `capture_*/USAGE.md`。
+
+启用前需先核实以下各项：分辨率与帧数（4K、300 帧、25 fps）、深度编码（光线距离或平面深度）、相机运动与朝向（是否需要去转向），以及 DA² 序列级标定能否按论文做法拟合。上面所列的核实项均未做。
+
+## 11. 第二部分片段与参考方向（用户 11-20 定稿）
+
+参考方向为内容水平角（右为正，0 = 片段正前方），俯仰均为 0；已写入两份配置的 `part2.clips[].reference_yaw_deg` 与练习片段，清单 P01–P40、T01–T05、AP01 已重新生成（只有参考方向变化）。
+
+| 片段 | 来源（Replica 序列与帧） | 参考方向 |
+| --- | --- | --- |
+| near_A | hotel_0 seq_000 | +60° |
+| near_B | hotel_0 seq_008，帧 200–499 | −120° |
+| near_C | office_0 seq_002，帧 75–374 | −60° |
+| near_D | office_0 seq_011，帧 100–399 | +30° |
+| near_E | hotel_0 seq_007，帧 0–299 | −30° |
+| near_F | apartment_0 seq_007，帧 0–299 | −30° |
+| train_near（第二部分练习） | apartment_0 seq_003，帧 175–474 | −90° |
+| train_indoor（第一部分练习，只需 Ours PA） | room_0 seq_003，帧 25–324 | — |

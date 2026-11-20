@@ -152,6 +152,29 @@ namespace Pano2StereoVR.Study.Tests
         }
 
         [Test]
+        public void StaffSkipAndRecenterTextsNameTheirKeys()
+        {
+            // user 11-20: F8 with Y / N or Esc; R (yaw and pitch) and Shift+R (yaw only)
+            LoadTable();
+            foreach (string lang in new[] { StudyTexts.Chinese, StudyTexts.English })
+            {
+                StudyTexts.Language = lang;
+                StringAssert.Contains("Y", StudyTexts.Get("staff_skip_hint"));
+                StringAssert.Contains("Esc", StudyTexts.Get("staff_skip_hint"));
+                StringAssert.Contains("F8", StudyTexts.Get("status_staff_skip"));
+                StringAssert.Contains("Shift+R", StudyTexts.Get("status_recenter_keys"));
+                StringAssert.Contains("Shift+R", StudyTexts.Get("hmd_fit_steps"), "the forward is set in the headset-fitting step");
+                StringAssert.Contains("{2}", StudyTexts.Get("hmd_fit_forward_set"));
+                StringAssert.Contains("Y", StudyTexts.Get("recenter_dialog_note"));
+            }
+            Assert.IsFalse(StudyTexts.Has("status_recenter_locked"), "replaced by status_recenter_ignored");
+            StudyTexts.Language = StudyTexts.Chinese;
+            Assert.AreEqual("跳过当前视频？", StudyTexts.Get("staff_skip_title"));
+            Assert.AreEqual("请稍候", StudyTexts.Get("staff_wait"));
+            Assert.AreEqual("Please wait", StudyTexts.En("staff_wait"));
+        }
+
+        [Test]
         public void EyeRangeTextsDoNotAskToKeepTheHeadStill()
         {
             // user 11-20: the measurement comes before the gaze practice; its texts ask for natural viewing only

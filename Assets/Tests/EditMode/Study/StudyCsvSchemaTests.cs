@@ -12,10 +12,10 @@ namespace Pano2StereoVR.Study.Tests
         private static readonly Dictionary<string, string[]> Expected = new Dictionary<string, string[]>
         {
             { "stereotest.csv", new[] { "participant_id", "trial_index", "block", "shape", "disparity_px", "disparity_arcsec", "arcsec_per_px", "px_source", "response", "correct", "rt_s", "skipped" } },
-            { "part1.csv", new[] { "participant_id", "block", "trial_index", "group_index", "position_in_group", "clip_id", "condition", "repetition", "depth_quality", "visual_comfort", "artifact_annoyance", "rt_depth_s", "rt_comfort_s", "rt_artifact_s", "initial_depth", "initial_comfort", "initial_artifact", "revisions", "view_s", "loops", "replays", "skipped" } },
+            { "part1.csv", new[] { "participant_id", "block", "trial_index", "group_index", "position_in_group", "clip_id", "condition", "repetition", "depth_quality", "visual_comfort", "artifact_annoyance", "rt_depth_s", "rt_comfort_s", "rt_artifact_s", "initial_depth", "initial_comfort", "initial_artifact", "revisions", "view_s", "loops", "replays", "skipped", "skip_reason" } },
             { "part1_replays.csv", new[] { "participant_id", "group_index", "position_in_group", "trial_index", "clip_id", "condition", "replay", "t_start_utc", "view_s", "loops", "completed" } },
             { "part1_revisions.csv", new[] { "participant_id", "group_index", "trial_index", "clip_id", "condition", "event", "revision", "reviewed", "depth_quality", "visual_comfort", "artifact_annoyance", "t_utc" } },
-            { "part2.csv", new[] { "participant_id", "block", "trial_index", "clip_id", "cond_a", "cond_b", "pair_type", "different", "preference", "rt_q1_s", "rt_q2_s", "view_a_s", "view_b_s", "loops_a", "loops_b", "max_dev_a_deg", "max_dev_b_deg", "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b", "paw_theta_deg", "skipped" } },
+            { "part2.csv", new[] { "participant_id", "block", "trial_index", "clip_id", "cond_a", "cond_b", "pair_type", "different", "preference", "rt_q1_s", "rt_q2_s", "view_a_s", "view_b_s", "loops_a", "loops_b", "max_dev_a_deg", "max_dev_b_deg", "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b", "paw_theta_deg", "skipped", "skip_reason" } },
             { "eyerange.csv", new[] { "participant_id", "sweep", "direction_deg", "repeat", "speed_deg_s", "onset_dev_deg", "head_onset_ecc_deg", "censored", "stopped_early", "max_head_rot_deg", "skipped" } },
             { "eyerange_trace.csv", new[] { "participant_id", "sweep", "direction_deg", "repeat", "t_s", "dot_ecc_deg", "head_yaw_deg", "head_pitch_deg", "head_rot_deg", "head_rot_along_deg" } },
             { "gazetraining.csv", new[] { "participant_id", "attempt", "position", "dot_id", "dot_angle_deg", "dwell_s", "max_dev_deg", "attempt_max_dev_deg", "threshold_deg", "attempt_passed" } },
@@ -77,13 +77,14 @@ namespace Pano2StereoVR.Study.Tests
             try
             {
                 var log = new StudyDataLogger(dir, "P01");
-                log.Part2.Append("P01", "main", 3, "near_A", "pa", "paw", "real", 1, "-2", 1.25f, "2.5", 12.5f, 10.04f, 1, 0, 2.25, 3.5, 1.84, 3.1, 1, 0, 0, 0, 20.0, 0);
+                log.Part2.Append("P01", "main", 3, "near_A", "pa", "paw", "real", 1, "-2", 1.25f, "2.5", 12.5f, 10.04f, 1, 0, 2.25, 3.5, 1.84, 3.1, 1, 0, 0, 0, 20.0, 0, "");
+                log.Part2.Append("P01", "main", 4, "near_B", "paw", "pa", "real", "", "", "", "", "", "", "", "", "", "", 0.9, 1.2, 0, 0, "", "", 20.0, 1, "staff");
                 log.EyeRange.Append("P01", 5, 135.0, 1, 8.0, 2.1, 21.37, 0, 1, 3.04, 0);
                 log.EyeRange.Append("P01", 6, 0.0, 0, 8.0, 1.2, "", 1, 0, 2.25, 0);
                 log.EyeRange.Append("P01", 7, 90.0, 1, 8.0, "", "", "", "", "", 1);
                 log.EyeRangeTrace.Append("P01", 5, 135.0, 1, 0.0139, 0.111, -1.5, 1.25, 0.0, 0.0);
-                log.Part1.Append("P01", "main", 7, 4, 1, "vin_A", "ours", 0, 4, 5, 3, 1.5f, 2f, 2.5f, 3, 5, 3, 1, 10.2f, 1, 2, 0);
-                log.Part1.Append("P01", "main", 8, 4, 2, "vin_A", "mono", 0, "", "", "", "", "", "", "", "", "", 0, "", 0, 0, 1);
+                log.Part1.Append("P01", "main", 7, 4, 1, "vin_A", "ours", 0, 4, 5, 3, 1.5f, 2f, 2.5f, 3, 5, 3, 1, 10.2f, 1, 2, 0, "");
+                log.Part1.Append("P01", "main", 8, 4, 2, "vin_A", "mono", 0, "", "", "", "", "", "", "", "", "", 0, "", 0, 0, 1, "staff");
                 log.Part1Replays.Append("P01", 4, 1, 7, "vin_A", "ours", 1, "2026-11-19T05:00:00.000Z", 4.5f, 0, 0);
                 log.Part1Revisions.Append("P01", 4, 7, "vin_A", "ours", "revision", 1, 0, 4, 5, 3, "2026-11-19T05:00:00.000Z");
                 log.GazeTraining.Append("P01", 1, 0, 5, 225.0, 2f, 1.25, 3.5, 5f, 1);
@@ -92,7 +93,8 @@ namespace Pano2StereoVR.Study.Tests
                 log.WriteJson("session.json", new Dictionary<string, object> { { "participant_id", "P01" }, { "status", "complete" }, { "seed", 211295368377419L } });
                 string[] p2 = File.ReadAllLines(Path.Combine(dir, "part2.csv"));
                 Assert.AreEqual(string.Join(",", StudySchema.Part2), p2[0]);
-                Assert.AreEqual("P01,main,3,near_A,pa,paw,real,1,-2,1.25,2.5,12.5,10.04,1,0,2.25,3.5,1.84,3.1,1,0,0,0,20,0", p2[1]);
+                Assert.AreEqual("P01,main,3,near_A,pa,paw,real,1,-2,1.25,2.5,12.5,10.04,1,0,2.25,3.5,1.84,3.1,1,0,0,0,20,0,", p2[1]);
+                Assert.AreEqual("P01,main,4,near_B,paw,pa,real,,,,,,,,,,,0.9,1.2,0,0,,,20,1,staff", p2[2], "staff skip (F8)");
                 string[] er = File.ReadAllLines(Path.Combine(dir, "eyerange.csv"));
                 Assert.AreEqual(string.Join(",", StudySchema.EyeRange), er[0]);
                 Assert.AreEqual("P01,5,135,1,8,2.1,21.37,0,1,3.04,0", er[1], "stopped at the head onset");
@@ -101,8 +103,8 @@ namespace Pano2StereoVR.Study.Tests
                 string[] tr = File.ReadAllLines(Path.Combine(dir, "eyerange_trace.csv"));
                 Assert.AreEqual(string.Join(",", StudySchema.EyeRangeTrace), tr[0]);
                 Assert.AreEqual("P01,5,135,1,0.0139,0.111,-1.5,1.25,0,0", tr[1]);
-                Assert.AreEqual("P01,main,7,4,1,vin_A,ours,0,4,5,3,1.5,2,2.5,3,5,3,1,10.2,1,2,0", File.ReadAllLines(Path.Combine(dir, "part1.csv"))[1]);
-                Assert.AreEqual("P01,main,8,4,2,vin_A,mono,0,,,,,,,,,,0,,0,0,1", File.ReadAllLines(Path.Combine(dir, "part1.csv"))[2]);
+                Assert.AreEqual("P01,main,7,4,1,vin_A,ours,0,4,5,3,1.5,2,2.5,3,5,3,1,10.2,1,2,0,", File.ReadAllLines(Path.Combine(dir, "part1.csv"))[1]);
+                Assert.AreEqual("P01,main,8,4,2,vin_A,mono,0,,,,,,,,,,0,,0,0,1,staff", File.ReadAllLines(Path.Combine(dir, "part1.csv"))[2]);
                 Assert.AreEqual("P01,4,1,7,vin_A,ours,1,2026-11-19T05:00:00.000Z,4.5,0,0", File.ReadAllLines(Path.Combine(dir, "part1_replays.csv"))[1]);
                 Assert.AreEqual("P01,4,7,vin_A,ours,revision,1,0,4,5,3,2026-11-19T05:00:00.000Z", File.ReadAllLines(Path.Combine(dir, "part1_revisions.csv"))[1]);
                 Assert.AreEqual("P01,1,0,5,225,2,1.25,3.5,5,1", File.ReadAllLines(Path.Combine(dir, "gazetraining.csv"))[1]);

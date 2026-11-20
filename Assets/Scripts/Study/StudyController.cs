@@ -54,6 +54,25 @@ namespace Pano2StereoVR.Study
         private bool _eyeSweeping;
         private Sprite _rangeRingSprite;
         private GameObject _advanceIcon;
+        // staff skip (F8, user 11-20)
+        private bool _staffSkip;
+        private bool _staffScope;
+        private RectTransform _staffPanel;
+        private GameObject _staffWait;
+        private float _staffOpenedAt;
+        private int _resumeInputFrame = -1;
+        private bool _eventSystemWasEnabled = true;
+        // forward direction (user 11-20 18:50): set only by R / Shift+R, directly in the headset-fitting steps,
+        // otherwise through a confirmation; never automatically
+        private bool _hmdFitActive;
+        private bool _forwardSetInStep;
+        private bool _forwardEverSet;
+        private int _forwardSets;
+        private string _forwardSetKey = "";
+        private bool _dialogIsRecenter;
+        private bool _dialogYawOnly;
+        /// <summary>Direction the headset panels are anchored to: the set forward (content yaw 0, pitch 0), or a Part 2 trial's reference.</summary>
+        private Vector3 _panelAnchor = new Vector3(0f, 0f, 1f);
         private readonly List<UnityEngine.Object> _runtime = new List<UnityEngine.Object>();
         private Coroutine _run;
         private RectTransform _abortPanel;
@@ -112,6 +131,67 @@ namespace Pano2StereoVR.Study
         /// <summary>The orientation cross is waiting for the head to stay within the alignment tolerance.</summary>
         public bool Aligning => _aligning;
         public bool SkipControlsActive => _settings != null && _settings.IsQa;
+        /// <summary>F8 can skip the current Part 1 clip or Part 2 trial (formal and QA mode, user 11-20).</summary>
+        public bool StaffSkipAvailable => _staffScope && !_staffSkip && !_s.Finished && _s.Log != null;
+        /// <summary>A staff confirmation (F8 skip or emergency recenter) is open; other input is suspended.</summary>
+        public bool StaffDialogOpen => _staffPanel != null && _staffPanel.gameObject.activeSelf;
+        /// <summary>The forward has been set (R / Shift+R) in the current headset-fitting step.</summary>
+        public bool ForwardSetInStep => _forwardSetInStep;
+
+        /// <summary>Same as R (yawOnly false) or Shift+R (true).</summary>
+        public void RequestSetForward(bool yawOnly)
+        {
+            ManualRecenterMode(yawOnly);
+        }
+
+        /// <summary>Same as F8: open the staff-skip confirmation.</summary>
+        public void RequestStaffSkipDialog()
+        {
+            OpenStaffSkipDialog();
+        }
+
+        /// <summary>Same as Y (confirm) or N / Esc (cancel) while a staff confirmation is open.</summary>
+        public void AnswerStaffSkip(bool confirm)
+        {
+            AnswerStaffDialog(confirm);
+        }
+
+        /// <summary>Y (confirm) or N / Esc (cancel) for the open staff confirmation (F8 skip or emergency recenter).</summary>
+        public void AnswerStaffDialog(bool confirm)
+        {
+            if (!StaffDialogOpen)
+            {
+                return;
+            }
+            float open = Time.realtimeSinceStartup - _staffOpenedAt;
+            _staffPanel.gameObject.SetActive(false);
+            if (_staffWait != null)
+            {
+                _staffWait.SetActive(false);
+            }
+            _resumeInputFrame = Time.frameCount + 1; // resume input one frame later, so the same key press is not handled again
+            if (_dialogIsRecenter)
+            {
+                // emergency recenter (user 11-20): the head direction at the confirmation becomes the forward
+                if (confirm)
+                {
+                    Recenter(_dialogYawOnly ? RecenterMode.YawLevel : RecenterMode.YawAndPitch,
+                        _dialogYawOnly ? "emergency_yaw" : "emergency_yaw_pitch", "recenter_emergency");
+                }
+                else
+                {
+                    LogEvent("recenter_emergency_cancelled", _s.Step + " " + _s.TrialLabel + "; dialog open " + CsvLog.Format(Round(open, 2)) + " s");
+                }
+                _dialogIsRecenter = false;
+                return;
+            }
+            if (confirm)
+            {
+                _staffSkip = true;
+            }
+            LogEvent(confirm ? "staff_skip_confirmed" : "staff_skip_cancelled", _s.Step + " " + _s.TrialLabel + "; dialog open "
+                + CsvLog.Format(Round(open, 2)) + " s");
+        }
 
         /// <summary>QA only: abandon the current group (Part 1), trial (Part 2) or step; flagged skipped in the data.</summary>
         public void RequestSkipGroup()
@@ -164,7 +244,8 @@ namespace Pano2StereoVR.Study
             return Quaternion.Euler(-refPitch, refYaw, 0f) * local;
         }
 
-        private bool Interrupted => _skipGroup || _skipPart;
+        /// <summary>A QA skip (group, part) or a confirmed staff skip ends every wait of the current trial.</summary>
+        private bool Interrupted => _skipGroup || _skipPart || _staffSkip;
 
         /// <summary>Same effect as the trigger or Space while a self-paced clip may be advanced.</summary>
         public void RequestAdvance()
@@ -373,6 +454,17 @@ namespace Pano2StereoVR.Study
             _eyeSweeping = false;
             _rangeRingSprite = null;
             _advanceIcon = null;
+            _staffSkip = false;
+            _staffScope = false;
+            _staffPanel = null;
+            _staffWait = null;
+            _resumeInputFrame = -1;
+            _hmdFitActive = false;
+            _forwardSetInStep = false;
+            _forwardEverSet = false;
+            _forwardSets = 0;
+            _dialogIsRecenter = false;
+            _panelAnchor = Vector3.forward;
             _abortPanel = null;
             _abortReason = null;
             _exitConfirmRow = null;
@@ -389,14 +481,48 @@ namespace Pano2StereoVR.Study
             {
                 return;
             }
+            if (_resumeInputFrame >= 0 && Time.frameCount > _resumeInputFrame)
+            {
+                SuspendInput(false);
+            }
+            if (StaffDialogOpen)
+            {
+                // user 11-20: while the staff-skip confirmation is open only Y, N and Esc are handled
+                if (Input.GetKeyDown(KeyCode.Y))
+                {
+                    AnswerStaffDialog(true);
+                }
+                else if (Input.GetKeyDown(KeyCode.N) || Input.GetKeyDown(KeyCode.Escape))
+                {
+                    AnswerStaffDialog(false);
+                }
+                PlaceStaffWait();
+                _ui.SetStatus(StatusLine());
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.F8) && !IsTyping())
+            {
+                OpenStaffSkipDialog();
+                if (StaffDialogOpen)
+                {
+                    _ui.SetStatus(StatusLine());
+                    return;
+                }
+            }
+            if (_resumeInputFrame >= 0)
+            {
+                _ui.SetStatus(StatusLine());
+                return; // the frame right after the confirmation: no other key handling
+            }
             if (Input.GetKeyDown(KeyCode.Escape) && !_s.Finished && _s.Log != null)
             {
                 OpenAbortPanel();
             }
-            _ui.RecenterButton.interactable = !_recenterLocked;
+            _ui.RecenterButton.interactable = _hmdFitActive || EmergencyRecenterAllowed;
             if (Input.GetKeyDown(KeyCode.R) && !IsTyping())
             {
-                ManualRecenter();
+                // user 11-20: R = yaw and pitch, Shift+R = yaw only (level horizon)
+                ManualRecenterMode(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
             }
             if (_settings.IsQa && Input.GetKeyDown(KeyCode.PageDown) && !IsTyping())
             {
@@ -455,7 +581,12 @@ namespace Pano2StereoVR.Study
             }
             if (Time.realtimeSinceStartup < _recenterNoticeUntil)
             {
-                line += sep + StudyTheme.Tint(T("status_recenter_locked"), StudyTheme.StatusAlert, true);
+                line += sep + StudyTheme.Tint(T("status_recenter_ignored"), StudyTheme.StatusAlert, true);
+            }
+            line += sep + StudyTheme.Tint(T("status_recenter_keys"), StudyTheme.StatusDim);
+            if (StaffSkipAvailable)
+            {
+                line += sep + StudyTheme.Tint(T("status_staff_skip"), StudyTheme.StatusQa, true);
             }
             return line;
         }
@@ -467,30 +598,207 @@ namespace Pano2StereoVR.Study
             return sel != null && sel.GetComponent<InputField>() != null;
         }
 
-        private void Recenter()
+        /// <summary>
+        /// Recenter and log it: events.csv (event "recenter", or "recenter_emergency" outside the headset-fitting steps,
+        /// with kind, applied yaw and pitch offsets, step) and the running list "recenters" in session.json (user 11-20).
+        /// </summary>
+        private void Recenter(RecenterMode mode, string kind, string eventName = "recenter")
         {
             if (_rig == null)
             {
                 return;
             }
-            _rig.Recenter();
-            LogEvent("recenter", "");
+            _rig.Recenter(mode);
+            _forwardSets++;
+            _forwardEverSet = true;
+            LogEvent(eventName, string.Format(CultureInfo.InvariantCulture, "{0}: yaw offset {1:0.00} deg, pitch offset {2:0.00} deg ({3} {4})",
+                kind, _rig.YawOffsetDeg, _rig.PitchOffsetDeg, _s.Step, _s.TrialLabel).Trim());
+            List<object> list = _s.Session.TryGetValue("recenters", out object o) ? o as List<object> : null;
+            if (list == null)
+            {
+                list = new List<object>();
+                _s.Session["recenters"] = list;
+            }
+            list.Add(new Dictionary<string, object>
+            {
+                { "t_utc", UtcNow() }, { "kind", kind }, { "step", _s.Step }, { "trial", _s.TrialLabel },
+                { "yaw_offset_deg", Round(_rig.YawOffsetDeg, 2) }, { "pitch_offset_deg", Round(_rig.PitchOffsetDeg, 2) },
+            });
+            WriteSession();
+        }
+
+        /// <summary>Status-bar button: yaw and pitch (as the R key).</summary>
+        private void ManualRecenter()
+        {
+            ManualRecenterMode(false);
         }
 
         /// <summary>
-        /// Recenter from the status-bar button or the R key. Blocked while the head direction is measured (gaze
-        /// practice, Part 2 alignment and playback), because it would move the reference under the head; the
-        /// status bar then shows a notice for 3 s and events.csv records recenter_blocked.
+        /// An emergency recenter may be confirmed now: a session is running and neither the head direction is measured
+        /// (natural viewing range, gaze practice, Part 2 alignment to the second clip) nor a clip is playing.
         /// </summary>
-        private void ManualRecenter()
+        private bool EmergencyRecenterAllowed => _s.Log != null && !_s.Finished && !_recenterLocked && !ClipVisible && !_eyeSweeping;
+
+        /// <summary>
+        /// Set the forward (user 11-20 18:50): R / status-bar button = yaw and pitch, Shift+R = yaw only (level
+        /// horizon). In the headset-fitting steps it acts at once (the step's Continue needs it). Elsewhere, when
+        /// allowed (between trials, on intro, question and summary pages), it opens a confirmation (emergency recenter);
+        /// while the head direction is measured or a clip plays it is ignored and logged as recenter_ignored.
+        /// There are no automatic recenters; the forward stays until the next manual set.
+        /// </summary>
+        private void ManualRecenterMode(bool yawOnly)
         {
-            if (_recenterLocked)
+            if (StaffDialogOpen)
             {
-                _recenterNoticeUntil = Time.realtimeSinceStartup + 3f;
-                LogEvent("recenter_blocked", _s.Step + " " + _s.TrialLabel);
                 return;
             }
-            Recenter();
+            string key = yawOnly ? "Shift+R" : "R";
+            if (_hmdFitActive)
+            {
+                Recenter(yawOnly ? RecenterMode.YawLevel : RecenterMode.YawAndPitch, yawOnly ? "manual_yaw" : "manual_yaw_pitch");
+                _forwardSetInStep = true;
+                _forwardSetKey = key;
+                return;
+            }
+            if (!EmergencyRecenterAllowed)
+            {
+                _recenterNoticeUntil = Time.realtimeSinceStartup + 3f;
+                LogEvent("recenter_ignored", _s.Step + " " + _s.TrialLabel + " (" + key + ")");
+                return;
+            }
+            OpenStaffDialog(T(yawOnly ? "recenter_dialog_title_yaw" : "recenter_dialog_title_pitch"), T("recenter_dialog_note"),
+                "StaffRecenterPanel", true, yawOnly);
+            LogEvent("recenter_emergency_dialog", _s.Step + " " + _s.TrialLabel + " (" + key + ")");
+        }
+
+        // ------------------------------------------------------------------ staff skip (F8, user 11-20)
+        /// <summary>
+        /// F8: a confirmation on the desktop ("skip the current clip? Y / N or Esc"). While it is open the UI shortcuts,
+        /// the controller pointer and the event system are suspended, the headset shows a neutral "please wait" panel
+        /// in front of the participant, the Part 2 alignment timer and head-turn check pause. Available only during a
+        /// Part 1 clip (playback and first rating) or a Part 2 trial (alignment to the last answer).
+        /// </summary>
+        private void OpenStaffSkipDialog()
+        {
+            if (!StaffSkipAvailable || StaffDialogOpen || (_abortPanel != null && _abortPanel.gameObject.activeSelf))
+            {
+                return;
+            }
+            OpenStaffDialog(T("staff_skip_title"), T("staff_skip_note"), "StaffSkipPanel", false, false);
+            LogEvent("staff_skip_dialog", _s.Step + " " + _s.TrialLabel);
+        }
+
+        /// <summary>
+        /// Modal staff confirmation on the desktop (title, "Y confirm / N or Esc cancel", note): input suspended, the
+        /// headset shows the neutral wait panel. Used by the F8 skip and the emergency recenter.
+        /// </summary>
+        private void OpenStaffDialog(string title, string note, string name, bool recenter, bool yawOnly)
+        {
+            if (StaffDialogOpen || (_abortPanel != null && _abortPanel.gameObject.activeSelf))
+            {
+                return;
+            }
+            if (_staffPanel != null)
+            {
+                Destroy(_staffPanel.gameObject);
+            }
+            _dialogIsRecenter = recenter;
+            _dialogYawOnly = yawOnly;
+            StudyTheme.Palette p = StudyTheme.Light;
+            RectTransform outer = _ui.NewCardFrame(_ui.DesktopCanvas.transform, name, new Vector2(960, 330), p, out RectTransform inner);
+            var v = inner.gameObject.AddComponent<VerticalLayoutGroup>();
+            v.padding = new RectOffset(48, 48, 36, 36);
+            v.spacing = 16;
+            v.childControlHeight = true;
+            v.childControlWidth = true;
+            v.childForceExpandHeight = false;
+            v.childAlignment = TextAnchor.MiddleCenter;
+            _ui.Colored(inner, title, p.Error, TextAnchor.MiddleCenter, 34, true);
+            _ui.Strong(inner, T("staff_skip_hint"), TextAnchor.MiddleCenter);
+            _ui.Note(inner, note, TextAnchor.MiddleCenter);
+            outer.SetAsLastSibling();
+            _staffPanel = outer;
+            SuspendInput(true);
+            ShowStaffWait();
+            _staffOpenedAt = Time.realtimeSinceStartup;
+        }
+
+        private void SuspendInput(bool suspend)
+        {
+            if (suspend)
+            {
+                _resumeInputFrame = -1;
+            }
+            _ui.enabled = !suspend;
+            if (_pointer != null)
+            {
+                _pointer.enabled = !suspend;
+                if (!suspend)
+                {
+                    _triggerSeen = _pointer.TriggerPresses;
+                }
+            }
+            UnityEngine.EventSystems.EventSystem es = UnityEngine.EventSystems.EventSystem.current;
+            if (es != null)
+            {
+                if (suspend)
+                {
+                    _eventSystemWasEnabled = es.enabled;
+                    es.enabled = false;
+                }
+                else
+                {
+                    es.enabled = _eventSystemWasEnabled;
+                }
+            }
+            if (!suspend)
+            {
+                _resumeInputFrame = -1;
+            }
+        }
+
+        /// <summary>Neutral "please wait" panel between the participant and the headset panels (own world-space canvas).</summary>
+        private void ShowStaffWait()
+        {
+            if (_staffWait == null)
+            {
+                _staffWait = Track(new GameObject("StaffWait", typeof(RectTransform)));
+                var canvas = _staffWait.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = _rig.Camera;
+                canvas.sortingOrder = 100;
+                var rt = (RectTransform)_staffWait.transform;
+                rt.sizeDelta = new Vector2(1800, 1200);
+                rt.localScale = Vector3.one * 0.001f;
+                RectTransform bg = StudyUi.NewRect("Panel", rt);
+                StudyUi.Stretch(bg);
+                _ui.Fill(bg, StudyTheme.Dark.Card, 60);
+                Text t = _ui.NewText(bg, T("staff_wait"), StudyTheme.Dark.NoticeSize, TextAnchor.MiddleCenter, StudyTheme.Dark.Text, true);
+                StudyUi.Stretch((RectTransform)t.transform);
+            }
+            _staffWait.SetActive(true);
+            PlaceStaffWait();
+        }
+
+        private void PlaceStaffWait()
+        {
+            if (_staffWait == null || !_staffWait.activeSelf || _rig.Camera == null)
+            {
+                return;
+            }
+            Vector3 fwd = _rig.Camera.transform.forward;
+            _staffWait.transform.position = _rig.HeadPosition + fwd * 1.5f;
+            _staffWait.transform.rotation = Quaternion.LookRotation(fwd, Vector3.up);
+        }
+
+        /// <summary>Start (true) or end (false) the period in which F8 may skip the current clip or trial.</summary>
+        private void SetStaffScope(bool on)
+        {
+            _staffScope = on;
+            if (!on && StaffDialogOpen && !_dialogIsRecenter)
+            {
+                AnswerStaffDialog(false);
+            }
         }
 
         // ------------------------------------------------------------------ session
@@ -826,6 +1134,8 @@ namespace Pano2StereoVR.Study
             _cueMarker.SetActive(false);
             HideGazeDots();
             HideEyeTarget();
+            _panelAnchor = Vector3.forward;
+            _hmdFitActive = false;
             _s.Step = status;
             _s.TrialLabel = "";
             BuildEndPage(status);

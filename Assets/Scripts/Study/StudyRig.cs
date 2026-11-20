@@ -4,10 +4,21 @@ using UnityEngine.XR;
 
 namespace Pano2StereoVR.Study
 {
+    /// <summary>How a recenter (set forward) treats the head pitch (user 11-20). There are no automatic recenters.</summary>
+    public enum RecenterMode
+    {
+        /// <summary>R / status-bar button: the current head yaw and pitch both map to content yaw 0, pitch 0.</summary>
+        YawAndPitch,
+        /// <summary>Shift+R: only the yaw; the pitch offset is cleared (level content horizon).</summary>
+        YawLevel,
+    }
+
     /// <summary>
     /// Camera rig for the study. The camera is driven from the XR head pose (or the mouse on the desktop),
     /// the panorama sphere follows the camera position every frame, so the content behaves as 3DoF
-    /// (rotation only). Recenter() rotates the rig so that the current head yaw faces the content forward.
+    /// (rotation only). The rig rotation is a yaw offset combined with a pitch offset (Recenter); head angles are
+    /// always taken from the camera's world rotation, so they include the whole rig rotation. A pitch offset tilts
+    /// the content horizon by that angle (meant for posture changes only).
     /// </summary>
     public sealed class StudyRig : MonoBehaviour
     {
@@ -18,6 +29,13 @@ namespace Pano2StereoVR.Study
         private readonly List<InputDevice> _devices = new List<InputDevice>();
         private float _mouseYaw;
         private float _mousePitch;
+        private float _yawOffset;
+        private float _pitchOffset;
+
+        /// <summary>Yaw (deg) of the tracking space that maps to content yaw 0.</summary>
+        public float YawOffsetDeg => _yawOffset;
+        /// <summary>Pitch (deg, + = up) of the tracking space that maps to content pitch 0; 0 = level horizon.</summary>
+        public float PitchOffsetDeg => _pitchOffset;
 
         public bool XrActive => XRSettings.isDeviceActive;
 
@@ -120,21 +138,41 @@ namespace Pano2StereoVR.Study
             return string.IsNullOrEmpty(d.manufacturer) ? d.name : d.manufacturer + " " + d.name;
         }
 
-        /// <summary>Rotate the rig about Y so the current head yaw maps to content yaw 0.</summary>
-        public void Recenter()
+        /// <summary>
+        /// Rotate the rig so the current head yaw maps to content yaw 0; with <see cref="RecenterMode.YawAndPitch"/>
+        /// the head pitch maps to content pitch 0 as well (user 11-20). Roll is ignored. The rig rotation is
+        /// inverse(yaw offset, then pitch offset), so the head yaw after the call is exactly 0 in every mode.
+        /// </summary>
+        public void Recenter(RecenterMode mode)
         {
             if (Camera == null)
             {
                 return;
             }
-            Vector3 f = Camera.transform.localRotation * Vector3.forward;
-            float localYaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
-            transform.rotation = Quaternion.Euler(0f, -localYaw, 0f);
+            YawPitchOf(Camera.transform.localRotation * Vector3.forward, out float yaw, out float pitch);
+            _yawOffset = yaw;
+            _pitchOffset = mode == RecenterMode.YawAndPitch ? pitch : 0f;
+            transform.rotation = Quaternion.Inverse(Quaternion.Euler(-_pitchOffset, _yawOffset, 0f));
+        }
+
+        /// <summary>Yaw and pitch (deg, + = right / up) of a direction (x right, y up, z forward).</summary>
+        public static void YawPitchOf(Vector3 f, out float yaw, out float pitch)
+        {
+            float n = f.magnitude;
+            if (n < 1e-9f)
+            {
+                yaw = 0f;
+                pitch = 0f;
+                return;
+            }
+            yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
+            pitch = Mathf.Asin(Mathf.Clamp(f.y / n, -1f, 1f)) * Mathf.Rad2Deg;
         }
 
         /// <summary>
         /// Desktop only (no effect in XR): point the simulated head at a content direction (yaw, pitch in
-        /// degrees, + = right / up). Used by the desktop autopilot to simulate the head for orientation alignment.
+        /// degrees, + = right / up), through the whole rig rotation (yaw and pitch offsets). Used by the desktop
+        /// autopilot to simulate the head for orientation alignment.
         /// </summary>
         public void SetDesktopView(float contentYaw, float contentPitch)
         {
@@ -142,8 +180,10 @@ namespace Pano2StereoVR.Study
             {
                 return;
             }
-            _mouseYaw = WrapDegrees(contentYaw - transform.eulerAngles.y);
-            _mousePitch = Mathf.Clamp(-contentPitch, -85f, 85f);
+            Vector3 world = Quaternion.Euler(-contentPitch, contentYaw, 0f) * Vector3.forward;
+            YawPitchOf(Quaternion.Inverse(transform.rotation) * world, out float yaw, out float pitch);
+            _mouseYaw = yaw;
+            _mousePitch = Mathf.Clamp(-pitch, -85f, 85f);
             UpdatePose(false);
         }
 

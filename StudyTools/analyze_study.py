@@ -10,7 +10,8 @@ part2.csv, ssq.csv, headpose.csv, playback.csv), plus pre_session.csv transcribe
 (in --data or given with --pre-session). Folders written before contract v3 are read where the fields
 exist (e.g. checkin.json pre_session_confirmed is accepted for paper_forms_confirmed).
 
-Rows flagged skipped = 1 (QA skip control, contract v4) are dropped when the folders are read.
+Rows flagged skipped = 1 (QA skip control, contract v4; staff skip F8 with skip_reason = staff, user 11-20) are dropped
+when the folders are read.
 
 The unit of analysis is the session folder. A participant with several folders (for example an aborted
 attempt and a complete one) is listed in the report; only complete sessions enter the results.
@@ -138,6 +139,8 @@ def load_participants(root: Path) -> list[dict]:
             "part1_replays": read_csv(d / "part1_replays.csv"),
             "part2": not_skipped(read_csv(d / "part2.csv")),
             "skipped": {f: count_skipped(read_csv(d / f)) for f in ("stereotest.csv", "eyerange.csv", "part1.csv", "part2.csv")},
+            "skip_reasons": {f: sorted(r.get("skip_reason", "") or "qa" for r in read_csv(d / f) if r not in not_skipped([r]))
+                             for f in ("part1.csv", "part2.csv")},
             "ssq": read_csv(d / "ssq.csv"),
             "headpose": read_csv(d / "headpose.csv"),
             "playback": read_csv(d / "playback.csv"),
@@ -836,7 +839,10 @@ def run(args) -> int:
                  + "；".join(f"{pid}: " + ", ".join(f"{u}（{st_}）" for u, st_ in v) for pid, v in sorted(duplicates.items())))
     L.append(f"- checkin.json 未确认纸质知情同意与基本信息表：{', '.join(no_paper) or '无'}")
     skipped_rows = {p["uid"]: sum(p["skipped"].values()) for p in people if sum(p["skipped"].values())}
-    L.append("- QA 跳过的行（skipped = 1，已排除）：" + ("；".join(f"{u} {n} 行" for u, n in sorted(skipped_rows.items())) or "无"))
+    L.append("- 跳过的行（skipped = 1，已排除；QA 跳过或主试 F8 跳过）：" + ("；".join(f"{u} {n} 行" for u, n in sorted(skipped_rows.items())) or "无"))
+    staff_rows = {p["uid"]: {f: v.count("staff") for f, v in p["skip_reasons"].items() if v.count("staff")} for p in people}
+    L.append("- 其中主试跳过（skip_reason = staff）：" + ("；".join(f"{u} " + "，".join(f"{f} {n} 行" for f, n in v.items())
+                                                        for u, v in sorted(staff_rows.items()) if v) or "无"))
     L.append(f"- 检验方向：{acfg['alternative']}；主要比较组：{', '.join(acfg['primary_family'])}（Holm 校正）")
     L.append(f"- 头部偏离阈值：{thr if thr is not None else '未设定（只报告分布）'}；丢帧比例阈值："
              f"{acfg['dropped_frame_fraction_threshold'] if acfg['dropped_frame_fraction_threshold'] is not None else '未设定（只报告分布）'}")

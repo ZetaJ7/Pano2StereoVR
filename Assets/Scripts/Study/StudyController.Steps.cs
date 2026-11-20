@@ -149,20 +149,76 @@ namespace Pano2StereoVR.Study
         }
 
         // ------------------------------------------------------------------ headset fitting
+        /// <summary>
+        /// Headset fitting (user 11-20 18:50): the experimenter sets the forward with R (yaw and pitch) or Shift+R (yaw
+        /// only) while the participant sits upright and looks straight ahead; Continue (and Space) stay disabled until
+        /// then. The desktop shows the applied offsets. Before the first set of a session the headset panel follows the
+        /// head yaw so it can be read while fitting; afterwards it stays at the set forward.
+        /// </summary>
         private IEnumerator HmdFitStep()
         {
             ShowGray();
             bool done = false;
+            _hmdFitActive = true;
+            _forwardSetInStep = false;
+            _panelAnchor = Vector3.forward;
             _ui.ClearDesktop();
             Transform c = _ui.DesktopContent;
-            _ui.Title(c, T("hmd_fit_title"), StudyTheme.Light.NoticeSize);
+            StudyTheme.Palette lp = StudyTheme.Light;
+            _ui.Title(c, T("hmd_fit_title"), lp.NoticeSize);
             _ui.Spacer(c, 10);
             _ui.BodyBlock(c, T("hmd_fit_steps"), 1080, 30);
-            _ui.Spacer(c, 30);
+            _ui.Spacer(c, 16);
+            Text status = _ui.Colored(c, T("hmd_fit_forward_unset"), lp.Warning, TextAnchor.MiddleCenter, 30, true);
+            _ui.Spacer(c, 16);
             RectTransform row = _ui.NewRow(c, 0, TextAnchor.MiddleCenter, 72);
-            _ui.NewButton(row, T("continue") + "  (Space)", 30, () => done = true, 380, 68, ButtonKind.Primary, "Btn_Continue");
-            yield return ShowHmdPanel("hmd_fit_hmd_title", "hmd_fit_hmd", "continue", () => done = true, () => done);
-            Recenter();
+            Action go = () =>
+            {
+                if (_forwardSetInStep)
+                {
+                    done = true;
+                }
+            };
+            Button desk = _ui.NewButton(row, T("continue") + "  (Space)", 30, go, 380, 68, ButtonKind.Primary, "Btn_Continue");
+
+            _ui.ClearHmd();
+            _ui.SetHmdSize(1700, 1000);
+            _ui.Title(_ui.HmdContent, T("hmd_fit_hmd_title"));
+            _ui.Spacer(_ui.HmdContent, 4);
+            _ui.Body(_ui.HmdContent, T("hmd_fit_hmd"), TextAnchor.MiddleCenter).lineSpacing = 1.3f;
+            _ui.Spacer(_ui.HmdContent, 16);
+            RectTransform hrow = _ui.NewRow(_ui.HmdContent, 10, TextAnchor.MiddleCenter, 114);
+            Button hmd = _ui.HmdButton(hrow, T("continue"), go, 380, 104, 38, ButtonKind.Primary, "Btn_Continue");
+            _ui.AddShortcut(KeyCode.Space, go);
+            _ui.AddShortcut(KeyCode.Return, go);
+            int seen = -1;
+            while (!done && !Interrupted)
+            {
+                if (!_forwardEverSet)
+                {
+                    _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance); // nothing to anchor to yet
+                }
+                else if (seen != _forwardSets)
+                {
+                    seen = _forwardSets;
+                    _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance);
+                }
+                if (_forwardSetInStep)
+                {
+                    status.color = lp.Success;
+                    status.text = TF("hmd_fit_forward_set", _forwardSetKey, _rig.YawOffsetDeg.ToString("0.0", CultureInfo.InvariantCulture),
+                        _rig.PitchOffsetDeg.ToString("0.0", CultureInfo.InvariantCulture));
+                }
+                desk.interactable = _forwardSetInStep;
+                hmd.interactable = _forwardSetInStep;
+                yield return null;
+            }
+            if (!_forwardSetInStep)
+            {
+                LogEvent("forward_not_set", "headset fitting ended without R / Shift+R (QA skip); the previous forward stays");
+            }
+            _hmdFitActive = false;
+            _ui.ShowHmd(false);
             _ui.ShowDesktopPanel(false);
         }
 
@@ -209,7 +265,6 @@ namespace Pano2StereoVR.Study
             ShowGray();
             bool go = false;
             yield return ShowHmdPanel("stereo_title", "stereo_intro", "start", () => go = true, () => go);
-            Recenter();
 
             double arcsecPerPx = StereoPixelArcsec(st, out string pxSource, out int eyeWidth, out double hfov);
             int size = RandomDotStereogram.TexturePxForOnePixelTexels(st.QuadSizeDeg, arcsecPerPx);
@@ -260,7 +315,7 @@ namespace Pano2StereoVR.Study
                 _rdsTex.Apply(false, false);
                 _quadMat.mainTexture = _rdsTex;
 
-                Vector3 fwd = _rig.YawForward();
+                Vector3 fwd = _panelAnchor; // user 11-20: at the set forward, not the instantaneous head direction
                 _rdsQuad.transform.position = _rig.HeadPosition + fwd * st.QuadDistanceM + Vector3.up * 0.12f;
                 _rdsQuad.transform.rotation = Quaternion.LookRotation(fwd, Vector3.up);
                 _rdsQuad.transform.localScale = new Vector3(quadSize, quadSize, 1f);
@@ -363,6 +418,12 @@ namespace Pano2StereoVR.Study
                 {
                     insideSince = now;
                 }
+                if (StaffDialogOpen)
+                {
+                    // user 11-20: the alignment does not progress while the staff-skip confirmation is open
+                    insideSince = -1f;
+                    inside = false;
+                }
                 float progress = !inside ? 0f : (dwell <= 0f ? 1f : (now - insideSince) / dwell);
                 SetAlignFeedback(inside, progress);
                 if (devText != null)
@@ -456,7 +517,6 @@ namespace Pano2StereoVR.Study
             ShowGray();
             bool go = false;
             yield return ShowHmdPanelText(T("eyerange_title"), TF("eyerange_intro", er.Sweeps.Count), "start", () => go = true, () => go);
-            Recenter();
             BuildEyeTarget(er);
             string pid = _s.Plan.ParticipantId;
             _recenterLocked = true; // user 11-20: as in the gaze training, no manual recenter while the head is measured
@@ -600,7 +660,7 @@ namespace Pano2StereoVR.Study
             bool next = false;
             _ui.ClearHmd();
             _ui.SetHmdSize(1400, 1180);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             Transform h = _ui.HmdContent;
             _ui.Title(h, T("eyerange_result_title"));
             BuildRangeDiagram(h, 640f, perDir, er.MaxEccentricityDeg);
@@ -911,7 +971,6 @@ namespace Pano2StereoVR.Study
             ShowGray();
             bool go = false;
             yield return ShowHmdPanel("gaze_title", "gaze_intro", "start", () => go = true, () => go);
-            Recenter();
             BuildGazeDots(g);
             Quaternion refRot = Quaternion.Euler(-g.ReferencePitchDeg, g.ReferenceYawDeg, 0f);
             Vector3 refYawFwd = Quaternion.Euler(0f, g.ReferenceYawDeg, 0f) * Vector3.forward;
@@ -1053,6 +1112,11 @@ namespace Pano2StereoVR.Study
                 AdvanceAllowed = () => ArmAdvance(hintFollowsHead, hintYaw, hintKey),
                 AdvanceRequested = () => _advanceRequested,
                 Abort = () => Interrupted,
+                // user 11-20: the clip pauses while the staff-skip confirmation is open and resumes at its frame on cancel
+                Paused = () => StaffDialogOpen,
+                PauseChanged = (paused, at) => LogEvent(paused ? "clip_pause_start" : "clip_pause_end",
+                    string.Format(CultureInfo.InvariantCulture, "{0} {1} at {2:0.00} s of viewing{3}", _s.Step, _s.TrialLabel, at,
+                        paused ? " (staff-skip dialog open)" : (_staffSkip ? " (skipped)" : " (resumed)"))),
             };
         }
 
@@ -1091,7 +1155,7 @@ namespace Pano2StereoVR.Study
         /// <summary>One part2.csv row; paw_theta_deg is the participant's PAw correction radius (the same in every row).</summary>
         private void WritePart2Row(StudyTrial t, object different, string preference, object rt1, string rt2, PlaybackStats a,
             PlaybackStats b, float maxA, float maxB, object alignS, object startDev, int restartsA, int restartsB,
-            bool reminderOffA, bool reminderOffB, bool skipped)
+            bool reminderOffA, bool reminderOffB, bool skipped, string skipReason = "")
         {
             _s.Log.Part2.Append(_s.Plan.ParticipantId, t.Block, t.Index, t.ClipId, t.CondA, t.CondB, t.PairType,
                 different, preference, rt1, rt2,
@@ -1099,7 +1163,7 @@ namespace Pano2StereoVR.Study
                 a != null ? (object)a.Loops : "", b != null ? (object)b.Loops : "",
                 a != null ? (object)Round(maxA, 2) : "", b != null ? (object)Round(maxB, 2) : "", alignS, startDev,
                 restartsA, restartsB, a != null ? (object)(reminderOffA ? 1 : 0) : "", b != null ? (object)(reminderOffB ? 1 : 0) : "",
-                Round(_s.PawThetaDeg, 2), skipped ? 1 : 0);
+                Round(_s.PawThetaDeg, 2), skipped ? 1 : 0, skipped ? (string.IsNullOrEmpty(skipReason) ? "qa" : skipReason) : "");
         }
 
         /// <summary>Result of one Part 2 segment: the completed viewing and how often it was restarted.</summary>
@@ -1147,7 +1211,7 @@ namespace Pano2StereoVR.Study
                     rows.Add(HeadRow(2, t.Index, seg, ts, frame, t.ReferenceYawDeg, t.ReferencePitchDeg));
                     float dev = HeadDeviation(t.ReferenceYawDeg, t.ReferencePitchDeg);
                     max = Mathf.Max(max, dev);
-                    if (check && dev > threshold && !headOut)
+                    if (check && dev > threshold && !headOut && !StaffDialogOpen)
                     {
                         headOut = true;
                         outDeg = dev;
@@ -1263,7 +1327,7 @@ namespace Pano2StereoVR.Study
             int answer = -1;
             _ui.ClearHmd();
             _ui.SetHmdSize(1700, 820);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.Title(_ui.HmdContent, title);
             _ui.Spacer(_ui.HmdContent, 4);
             _ui.BodyBlock(_ui.HmdContent, body, 1440);
@@ -1285,7 +1349,6 @@ namespace Pano2StereoVR.Study
             ShowGray();
             bool go = false;
             yield return ShowHmdPanel("part2_title", "part2_intro", "start", () => go = true, () => go);
-            Recenter();
             StudyTiming tm = _s.Plan.Timing;
             List<StudyTrial> trials = part.Trials;
             if (trials.Count == 0)
@@ -1300,11 +1363,14 @@ namespace Pano2StereoVR.Study
                 StudyTrial t = trials[i];
                 if (_skipPart)
                 {
-                    WritePart2Row(t, "", "", "", "", null, null, 0f, 0f, "", "", 0, 0, false, false, true);
+                    WritePart2Row(t, "", "", "", "", null, null, 0f, 0f, "", "", 0, 0, false, false, true, "qa");
                     continue;
                 }
                 _skipGroup = false;
                 _s.TrialLabel = (i + 1) + "/" + trials.Count + " " + t.Block + " " + t.ClipId + " " + t.CondA + "-" + t.CondB;
+                SetStaffScope(true); // user 11-20: F8 skips the whole trial (both segments and the questions)
+                // user 11-20: the in-trial panels (head-turn prompts, choices, questions) sit at the trial's reference direction
+                _panelAnchor = Quaternion.Euler(-t.ReferencePitchDeg, t.ReferenceYawDeg, 0f) * Vector3.forward;
                 var head = new List<object[]>();
                 var statsA = new PlaybackStats();
                 var statsB = new PlaybackStats();
@@ -1368,10 +1434,12 @@ namespace Pano2StereoVR.Study
                         rt2 = CsvLog.Format(r2);
                     }
                 }
+                SetStaffScope(false);
+                bool staff = _staffSkip;
                 bool skipped = Interrupted;
                 WritePart2Row(t, different >= 0 ? (object)different : "", preference, different >= 0 ? (object)rt1 : "", rt2,
                     playedA ? statsA : null, playedB ? statsB : null, maxA, maxB, Round(alignS, 2), Round(startDev, 2),
-                    segA.Restarts, segB.Restarts, segA.ReminderOff, segB.ReminderOff, skipped);
+                    segA.Restarts, segB.Restarts, segA.ReminderOff, segB.ReminderOff, skipped, staff ? "staff" : "qa");
                 if (playedA)
                 {
                     WritePlayback(2, t.Index, "A", statsA);
@@ -1381,7 +1449,17 @@ namespace Pano2StereoVR.Study
                     WritePlayback(2, t.Index, "B", statsB);
                 }
                 _s.Log.HeadPose.AppendRows(head);
-                if (skipped)
+                if (staff)
+                {
+                    _s.Skips++;
+                    _staffSkip = false; // consumed: the next trial runs normally
+                    _recenterLocked = false;
+                    StopAdvance();
+                    ShowGray();
+                    _ui.ShowHmd(false);
+                    LogEvent("staff_skip", "part 2 trial " + t.Index + " " + t.ClipId + " " + t.CondA + "-" + t.CondB);
+                }
+                else if (skipped)
                 {
                     _s.Skips++;
                     LogEvent("qa_skip", "part 2 trial " + t.Index + (_skipPart ? " and the rest of part 2" : ""));
@@ -1390,8 +1468,10 @@ namespace Pano2StereoVR.Study
                 {
                     _s.Part2TrialsDone++;
                 }
+                _panelAnchor = Vector3.forward;
                 yield return Wait(tm.GrayBetweenTrialsSeconds);
             }
+            _panelAnchor = Vector3.forward;
             _s.TrialLabel = "";
         }
 
@@ -1523,7 +1603,8 @@ namespace Pano2StereoVR.Study
                 t.Repetition, Score(rec.Depth), Score(rec.Comfort), Score(rec.Artifact),
                 rated ? (object)rec.RtDepth : "", rated ? (object)rec.RtComfort : "", rated ? (object)rec.RtArtifact : "",
                 Score(rec.InitialDepth), Score(rec.InitialComfort), Score(rec.InitialArtifact), rec.Revisions,
-                rec.ViewSeconds > 0f ? (object)rec.ViewSeconds : "", rec.Loops, rec.Replays, rec.Skipped ? 1 : 0);
+                rec.ViewSeconds > 0f ? (object)rec.ViewSeconds : "", rec.Loops, rec.Replays, rec.Skipped ? 1 : 0,
+                rec.Skipped ? (rec.SkipReason.Length > 0 ? rec.SkipReason : "qa") : "");
             if (!rec.Skipped)
             {
                 _s.Part1TrialsDone++;
@@ -1535,7 +1616,6 @@ namespace Pano2StereoVR.Study
             ShowGray();
             bool go = false;
             yield return ShowHmdPanel("part1_title", "part1_intro", "start", () => go = true, () => go);
-            Recenter();
             StudyTiming tm = _s.Plan.Timing;
             StudyPartOptions o = part.Options;
             _p1Seq = part.Trials.ToList();
@@ -1566,18 +1646,21 @@ namespace Pano2StereoVR.Study
                 if (!Interrupted)
                 {
                     _s.TrialLabel = "practice " + (i + 1) + "/" + single.Count + " " + t.ClipId + " " + t.Condition;
+                    SetStaffScope(true); // user 11-20: F8 skips this clip only
                     yield return PlayPart1Next(t, o, rec);
                     string prefix = t.Block == "training" ? T("practice_label") + "  " : "";
                     if (!Interrupted)
                     {
                         yield return RatePart1(prefix, rec, true);
                     }
+                    SetStaffScope(false);
+                    ConsumeStaffSkip(rec, "part 1 practice");
                 }
                 else
                 {
                     SkipPart1Next(t);
                 }
-                rec.Skipped = Interrupted;
+                rec.Skipped = rec.Skipped || Interrupted;
                 if (rec.Rated)
                 {
                     LogRating(rec, "initial", false);
@@ -1649,11 +1732,14 @@ namespace Pano2StereoVR.Study
                         continue;
                     }
                     _s.TrialLabel = "group " + (gi + 1) + "/" + groups.Count + " clip " + (k + 1) + "/" + g.Count + " " + t.Block + " " + t.ClipId + " " + t.Condition;
+                    SetStaffScope(true); // user 11-20: F8 skips this clip only; the rest of the group goes on
                     yield return PlayPart1Next(t, o, rec);
                     if (!Interrupted)
                     {
                         yield return RatePart1("", rec, true);
                     }
+                    SetStaffScope(false);
+                    ConsumeStaffSkip(rec, "part 1 group " + g[0].GroupIndex + " clip " + (k + 1));
                     if (rec.Rated)
                     {
                         LogRating(rec, "initial", false);
@@ -1669,7 +1755,7 @@ namespace Pano2StereoVR.Study
                 bool skipped = Interrupted;
                 foreach (RatingRecord rec in recs)
                 {
-                    rec.Skipped = skipped;
+                    rec.Skipped = rec.Skipped || skipped; // a staff-skipped clip stays skipped
                     WritePart1Row(rec);
                 }
                 if (skipped)
@@ -1685,6 +1771,27 @@ namespace Pano2StereoVR.Study
                 yield return Wait(tm.GrayBetweenTrialsSeconds);
             }
             _s.TrialLabel = "";
+        }
+
+        /// <summary>
+        /// After a Part 1 clip: a confirmed staff skip (F8) marks this clip only as skipped (no rating, skip_reason
+        /// staff) and is consumed, so the next clip of the group plays normally (user 11-20).
+        /// </summary>
+        private void ConsumeStaffSkip(RatingRecord rec, string where)
+        {
+            if (!_staffSkip)
+            {
+                return;
+            }
+            _staffSkip = false;
+            rec.Skipped = true;
+            rec.SkipReason = "staff";
+            rec.Depth = rec.Comfort = rec.Artifact = 0;
+            _s.Skips++;
+            StopAdvance();
+            ShowGray();
+            _ui.ShowHmd(false);
+            LogEvent("staff_skip", where + " trial " + rec.Trial.Index + " " + rec.Trial.ClipId + " " + rec.Trial.Condition);
         }
 
         /// <summary>
@@ -1730,7 +1837,7 @@ namespace Pano2StereoVR.Study
             int answer = -2;
             _ui.ClearHmd();
             _ui.SetHmdSize(1760, 420 + 122 * recs.Count);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.Title(_ui.HmdContent, title);
             _ui.Note(_ui.HmdContent, T("group_summary_hint"), TextAnchor.MiddleCenter);
             for (int k = 0; k < recs.Count; k++)
@@ -1740,6 +1847,14 @@ namespace Pano2StereoVR.Study
                 RectTransform row = _ui.NewRow(_ui.HmdContent, 20, TextAnchor.MiddleCenter, 104);
                 _ui.Fill(row, StudyTheme.Dark.RowFill);
                 row.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(36, 14, 0, 0);
+                if (r.StaffSkipped)
+                {
+                    // user 11-20: a clip skipped by the experimenter has no rating, replay or re-rating
+                    Text skippedLabel = _ui.Body(row, "<b>" + TF("group_segment", k + 1) + "</b>      "
+                        + StudyTheme.Tint(T("group_skipped_clip"), StudyTheme.Dark.TextSecondary), TextAnchor.MiddleLeft, 36);
+                    skippedLabel.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+                    continue;
+                }
                 string text = "<b>" + TF("group_segment", k + 1) + "</b>      " + SummaryScore("scale_depth_short", r.Depth) + "     "
                     + SummaryScore("scale_comfort_short", r.Comfort) + "     " + SummaryScore("scale_artifact_short", r.Artifact);
                 Text label = _ui.Body(row, text, TextAnchor.MiddleLeft, 36);
@@ -1818,7 +1933,7 @@ namespace Pano2StereoVR.Study
         {
             _ui.ClearHmd();
             _ui.SetHmdSize(1700, 1000);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.Title(_ui.HmdContent, title);
             if (!string.IsNullOrEmpty(body))
             {
@@ -1850,7 +1965,7 @@ namespace Pano2StereoVR.Study
         {
             _ui.ClearHmd();
             _ui.SetHmdSize(1600, 600);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.Notice(_ui.HmdContent, T(titleKey), string.IsNullOrEmpty(bodyKey) ? null : T(bodyKey));
         }
 
@@ -1866,7 +1981,7 @@ namespace Pano2StereoVR.Study
             float shown = Time.realtimeSinceStartup;
             _ui.ClearHmd();
             _ui.SetHmdSize(1500, 560);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.Title(_ui.HmdContent, T(questionKey));
             _ui.Spacer(_ui.HmdContent, 10);
             RectTransform row = _ui.NewRow(_ui.HmdContent, 60, TextAnchor.MiddleCenter, 140);
@@ -1889,7 +2004,7 @@ namespace Pano2StereoVR.Study
             float shown = Time.realtimeSinceStartup;
             _ui.ClearHmd();
             _ui.SetHmdSize(1840, 600);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.Title(_ui.HmdContent, T("part2_q2"));
             _ui.Spacer(_ui.HmdContent, 10);
             RectTransform row = _ui.NewRow(_ui.HmdContent, 10, TextAnchor.MiddleCenter, 190);
@@ -1921,7 +2036,7 @@ namespace Pano2StereoVR.Study
             float shown = Time.realtimeSinceStartup;
             _ui.ClearHmd();
             _ui.SetHmdSize(1500, 1060);
-            _ui.PlaceHmdCanvas(_rig.HeadPosition, _rig.YawForward(), PanelDistance);
+            _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
             _ui.QuestionHeader(_ui.HmdContent, prefix, T(titleKey));
             for (int score = 5; score >= 1; score--)
             {

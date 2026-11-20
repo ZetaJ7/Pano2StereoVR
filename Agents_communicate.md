@@ -164,3 +164,23 @@ Claude 与 GPT 在主观实验程序（本工作树）上协作的交流文档�
 - 清单文件名带子文件夹（`part1/practice`、`part1/dummy`、`part1/<cell>`、`part2/practice`、`part2/near`，正斜杠），来自配置 `stimulus_folders`；程序用 `StudyDataLogger.StimulusFullPath` 在 `stimuli_dir` 下解析（播放、缺失检查、清单校验和），`playback.csv` 的 `file` 为带子文件夹的相对名（`StudyClipPlayer.cs` 的 `PlaybackStats` 加 `FullPath`）。`tools/make_test_clips.py` 按同一结构写测试片段。**本机 `Stimuli/` 根目录的现有测试片与样片不会再被找到**，需由用户移到对应子文件夹或 `_samples/`（未动 `Stimuli/`）。
 - `StudyTools/plans` 现为 P01–P40，`StudyTools/plans_pilot` 为 T01–T05，AP01 重新生成。与提交 f9cb16f 比较，P01–P30 与 AP01 除子文件夹外试次顺序完全相同。P01–P40 上第一部分每个条件在组内每个位置各 90 次。
 - 离线编译 0 错误，EditMode 51/51；模拟数据（40 人）+ 分析端到端通过；测试片段工具按子文件夹生成，`--check-files` 通过。
+
+### 2026-11-20 14:50 Claude：Recenter 水平与俯仰（Shift+R 只水平）；F8 主试跳过（走查第 64–65 条，用户 11-20）
+
+- Recenter：R 与状态栏按钮重定水平与俯仰，Shift+R 只重定水平（俯仰归零）；步骤开始时的自动 Recenter 只重定水平并保留上次手动的俯仰偏移。`StudyRig` 的装置旋转为水平偏移与俯仰偏移的组合，桌面模拟视线按完整装置旋转反算；`events.csv` 的 `recenter` 与 `session.json` 的 `recenters` 记录方式与偏移。
+- F8：第一部分某段播放或首次评分、第二部分一个试次中有效（正式与 QA 模式）；电脑上确认框（Y / N 或 Esc），头显内“请稍候”遮挡面板（控制器自建的世界空间画布）。第一部分只跳过这一段，第二部分跳过整个试次；`part1.csv`、`part2.csv` 加 `skip_reason`（`staff` / `qa`），数据契约仍为 v6（第四次发布前修订）。
+- **请 Fable 注意**：未改 UI 工厂与主题文件。确认框打开时控制器把 `StudyUi` 组件 `enabled` 设为 false（暂停其 `Update` 中的快捷键处理）、`StudyPointer` 与 EventSystem 也暂停，关闭后下一帧恢复。若以后在 `StudyUi.Update` 中加入其他逐帧逻辑，确认框打开期间它也会暂停。确认框用 `NewCardFrame`、`Colored`、`Strong`、`Note` 搭建。
+- 离线编译 0 错误，EditMode 53/53；模拟数据（含 1 个会话的主试跳过）+ 分析端到端通过。未在编辑器中运行。
+
+### 2026-11-20 15:15 Claude：F8 确认框打开时暂停播放（走查第 66 条，用户 11-20）
+
+- `PlayRequest.Paused` / `PauseChanged`（`StudyClipPlayer.cs`）：确认框打开时视频停在当前帧，观看时长、循环、自定节奏最短时长不计，`OnFrame`（头部姿态记录与转头检测）暂停；取消后从该帧继续，确认则照常跳过。`events.csv` 记 `clip_pause_start`、`clip_pause_end`。自动 Recenter 维持现状（用户确认）。
+- 离线编译 0 错误，EditMode 53/53；模拟数据 + 分析端到端通过。未在编辑器中运行。
+
+### 2026-11-20 18:35 Claude：取消自动 Recenter，正前方只在戴头显步骤设定（另有紧急重设确认框）；面板固定方向；第二部分参考方向（走查第 67–68 条，用户 11-20）
+
+- 程序不再自动重设正前方。R / Shift+R 在两个戴头显步骤中直接设定（“继续”在设定前不可用，电脑显示偏移）；其他允许的时段弹出确认框作紧急重设（与 F8 共用 `OpenStaffDialog`），测量头部或播放时无效（`recenter_ignored`）。
+- 头显面板固定在设定的正前方，第二部分试次内的面板固定在试次参考方向；第一部分提示条、“请稍候”面板、首次设定前的戴头显面板例外。
+- 第二部分参考方向定稿（near_A +60 … train_near −90），P01–P40、T01–T05、AP01 重新生成，只有参考方向变化。
+- **请 Fable 注意**：未改 UI 工厂与主题文件；所有 `PlaceHmdCanvas` 现在用 `_panelAnchor`。
+- 离线编译 0 错误，EditMode 53/53；模拟数据 + 分析端到端通过。未在编辑器中运行。

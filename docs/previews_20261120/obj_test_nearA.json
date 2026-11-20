@@ -1,0 +1,109 @@
+[
+ {
+  "item": "near_A",
+  "role": "part2 candidate",
+  "seq": "hotel_0_seed_300",
+  "kind": "existing",
+  "directions": {
+   "-180": {
+    "obj_share": 0.0,
+    "near_share": 0.17399563219436737,
+    "obj_depth_m": null,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "-150": {
+    "obj_share": 0.0,
+    "near_share": 0.12716684107557213,
+    "obj_depth_m": null,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "-120": {
+    "obj_share": 0.0,
+    "near_share": 0.0189726557168206,
+    "obj_depth_m": null,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "-90": {
+    "obj_share": 0.0,
+    "near_share": 0.03676236407479867,
+    "obj_depth_m": null,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "-60": {
+    "obj_share": 0.035044815505709995,
+    "near_share": 0.5400154693116157,
+    "obj_depth_m": 1.0770000219345093,
+    "frame0": 0.0,
+    "frame150": 0.05782792665726375,
+    "frame299": 0.05853314527503526
+   },
+   "-30": {
+    "obj_share": 0.0073365485235907,
+    "near_share": 0.8380385822830884,
+    "obj_depth_m": 1.0609999895095825,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "0": {
+    "obj_share": 0.03952636607670958,
+    "near_share": 0.882683470585559,
+    "obj_depth_m": 1.1410000324249268,
+    "frame0": 0.054301833568406205,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "30": {
+    "obj_share": 0.052004185813731285,
+    "near_share": 0.8689430820328496,
+    "obj_depth_m": 1.2289999723434448,
+    "frame0": 0.0,
+    "frame150": 0.04866008462623413,
+    "frame299": 0.0
+   },
+   "60": {
+    "obj_share": 0.06811046908412575,
+    "near_share": 0.44446972109741106,
+    "obj_depth_m": 1.5269999504089355,
+    "frame0": 0.0,
+    "frame150": 0.06417489421720733,
+    "frame299": 0.09520451339915374
+   },
+   "90": {
+    "obj_share": 0.01401337640474999,
+    "near_share": 0.0666886573547477,
+    "obj_depth_m": 1.2910000085830688,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "120": {
+    "obj_share": 0.0,
+    "near_share": 0.20651531006870194,
+    "obj_depth_m": null,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   },
+   "150": {
+    "obj_share": 0.0,
+    "near_share": 0.23235816006187723,
+    "obj_depth_m": null,
+    "frame0": 0.0,
+    "frame150": 0.0,
+    "frame299": 0.0
+   }
+  },
+  "best_dir_deg": 60,
+  "best_obj_share": 0.06811046908412575,
+  "best_obj_depth_m": 1.5269999504089355
+ }
+]

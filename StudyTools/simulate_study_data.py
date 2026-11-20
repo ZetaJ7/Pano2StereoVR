@@ -4,7 +4,8 @@ The output is for checking the data pipeline only. Every session.json is marked 
 and analyze_study.py prints a banner when it sees such sessions. Never mix this output with real data.
 The generator also writes one aborted duplicate session folder and one checkin.json with the
 pre-v3 field name, so that the analysis paths for both cases are exercised. One session carries rows
-flagged skipped = 1 (QA skip control), which the analysis must drop; in that session the natural viewing range
+flagged skipped = 1 (QA skip control), which the analysis must drop (another session has one staff skip, F8, in each part,
+skip_reason = staff); in that session the natural viewing range
 measurement is skipped as well, so its PAw radius is the default (15 deg). The other sessions get plausible
 continuous sweeps (eyerange.csv, eyerange_trace.csv at 30 frames per second) and the radius chosen by the same
 provisional rule as the study program.
@@ -36,14 +37,15 @@ HEADERS = {
                        "px_source", "response", "correct", "rt_s", "skipped"],
     "part1.csv": ["participant_id", "block", "trial_index", "group_index", "position_in_group", "clip_id", "condition", "repetition",
                   "depth_quality", "visual_comfort", "artifact_annoyance", "rt_depth_s", "rt_comfort_s", "rt_artifact_s",
-                  "initial_depth", "initial_comfort", "initial_artifact", "revisions", "view_s", "loops", "replays", "skipped"],
+                  "initial_depth", "initial_comfort", "initial_artifact", "revisions", "view_s", "loops", "replays", "skipped", "skip_reason"],
     "part1_replays.csv": ["participant_id", "group_index", "position_in_group", "trial_index", "clip_id", "condition", "replay",
                           "t_start_utc", "view_s", "loops", "completed"],
     "part1_revisions.csv": ["participant_id", "group_index", "trial_index", "clip_id", "condition", "event", "revision", "reviewed",
                             "depth_quality", "visual_comfort", "artifact_annoyance", "t_utc"],
     "part2.csv": ["participant_id", "block", "trial_index", "clip_id", "cond_a", "cond_b", "pair_type", "different", "preference",
                   "rt_q1_s", "rt_q2_s", "view_a_s", "view_b_s", "loops_a", "loops_b", "max_dev_a_deg", "max_dev_b_deg",
-                  "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b", "paw_theta_deg", "skipped"],
+                  "align_s", "start_dev_deg", "restarts_a", "restarts_b", "reminder_off_a", "reminder_off_b", "paw_theta_deg", "skipped",
+                  "skip_reason"],
     "eyerange.csv": ["participant_id", "sweep", "direction_deg", "repeat", "speed_deg_s", "onset_dev_deg", "head_onset_ecc_deg", "censored",
                      "stopped_early", "max_head_rot_deg", "skipped"],
     "eyerange_trace.csv": ["participant_id", "sweep", "direction_deg", "repeat", "t_s", "dot_ecc_deg", "head_yaw_deg", "head_pitch_deg",
@@ -177,7 +179,7 @@ def write_csv(path: Path, header: list[str], rows: list[list]) -> None:
 
 
 def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, incomplete: bool, old_checkin: bool,
-             qa_skips: bool = False) -> None:
+             qa_skips: bool = False, staff_skips: bool = False) -> None:
     pid = plan["participant_id"]
     d.mkdir(parents=True, exist_ok=True)
     gaze = plan.get("gaze_training", {})
@@ -255,9 +257,16 @@ def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, inc
             rep_rows.append([pid, t["group_index"], t["position_in_group"], t["index"], t["clip_id"], t["condition"], 1,
                              "2026-11-19T00:00:30.000Z", round(rng.uniform(2.0, 10.0), 2), 0, 0])
         skipped = int(qa_skips and t["group_index"] == last_group)
+        staff = staff_skips and t["block"] == "main" and t["group_index"] == 3 and t["position_in_group"] == 1
+        if staff:
+            # staff skip (F8, user 11-20): this clip only, no rating
+            p1_rows.append([pid, t["block"], t["index"], t["group_index"], t["position_in_group"], t["clip_id"], t["condition"],
+                            t.get("repetition", 0), *[""] * 9, 0, round(rng.uniform(1.0, 5.0), 2), 0, 0, 1, "staff"])
+            pb_rows.append([pid, 1, t["index"], "clip", t["file"], 300, 120, 0, 33.3, 34.0])
+            continue
         p1_rows.append([pid, t["block"], t["index"], t["group_index"], t["position_in_group"], t["clip_id"], t["condition"],
                         t.get("repetition", 0), *scores, *[round(rng.uniform(1.0, 4.0), 2) for _ in range(3)],
-                        *initial, revisions, view, 1, replays, skipped])
+                        *initial, revisions, view, 1, replays, skipped, "qa" if skipped else ""])
         pb_rows.append([pid, 1, t["index"], "clip", t["file"], 300, 300, rng.choice([0, 0, 0, 1]), 33.3, 34.0])
     trials2 = parts[2]
     if incomplete:
@@ -283,7 +292,13 @@ def simulate(plan: dict, d: Path, rng: random.Random, *, random_rater: bool, inc
         p2_rows.append([pid, t["block"], t["index"], t["clip_id"], t["cond_a"], t["cond_b"], t["pair_type"],
                         int(diff), pref, round(rng.uniform(0.8, 3.0), 2), round(rng.uniform(1.0, 4.0), 2) if diff else "",
                         view_a, view_b, int(view_a // 10), int(view_b // 10), seg_max["A"], seg_max["B"],
-                        round(rng.uniform(1.0, 4.0), 2), round(rng.uniform(0.5, 4.9), 2), 0, 0, 0, 0, theta, int(qa_skips and ti == 2)])
+                        round(rng.uniform(1.0, 4.0), 2), round(rng.uniform(0.5, 4.9), 2), 0, 0, 0, 0, theta, int(qa_skips and ti == 2),
+                        "qa" if (qa_skips and ti == 2) else ""])
+        if staff_skips and ti == 5:
+            # staff skip (F8, user 11-20): the whole trial; answers and viewing columns empty
+            p2_rows[-1] = [pid, t["block"], t["index"], t["clip_id"], t["cond_a"], t["cond_b"], t["pair_type"], "", "", "", "",
+                           "", "", "", "", "", "", round(rng.uniform(1.0, 4.0), 2), round(rng.uniform(0.5, 4.9), 2), 0, 0, "", "",
+                           theta, 1, "staff"]
     write_csv(d / "part1.csv", HEADERS["part1.csv"], p1_rows)
     write_csv(d / "part1_revisions.csv", HEADERS["part1_revisions.csv"], rev_rows)
     write_csv(d / "part1_replays.csv", HEADERS["part1_replays.csv"], rep_rows)
@@ -318,7 +333,7 @@ def main() -> int:
     for i, path in enumerate(plans):
         plan = json.loads(path.read_text(encoding="utf-8"))
         simulate(plan, args.out / plan["participant_id"], rng, random_rater=(i == 1),
-                 incomplete=(i == len(plans) - 1), old_checkin=(i == 2), qa_skips=(i == 4))
+                 incomplete=(i == len(plans) - 1), old_checkin=(i == 2), qa_skips=(i == 4), staff_skips=(i == 6))
     if len(plans) > 2:
         # an aborted earlier attempt of the second participant in a time-stamped folder
         plan = json.loads(plans[1].read_text(encoding="utf-8"))

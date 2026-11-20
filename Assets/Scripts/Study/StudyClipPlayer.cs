@@ -65,6 +65,13 @@ namespace Pano2StereoVR.Study
         public Action AdvanceAllowed;
         public Action<Texture> OnTexture;
         public Action<float, long> OnFrame;
+        /// <summary>
+        /// Polled every frame; while true the clip is paused (user 11-20: staff-skip dialog open): the video stops at
+        /// its frame, the viewing time, loops, self-paced minimum and OnFrame do not advance; it resumes from that frame.
+        /// </summary>
+        public Func<bool> Paused;
+        /// <summary>Called when a pause starts (true) or ends (false), with the clip viewing time (s) at that moment.</summary>
+        public Action<bool, float> PauseChanged;
 
         /// <summary>Earliest advance for a clip of the given length.</summary>
         public float EffectiveMinSeconds(double clipLength)
@@ -248,14 +255,21 @@ namespace Pano2StereoVR.Study
                 stats.Missing = true;
                 stats.Error = s.Error;
                 req.OnTexture?.Invoke(_placeholder);
+                var ph = new PauseState();
                 while (true)
                 {
-                    float el = Time.realtimeSinceStartup - start;
                     if (req.Abort != null && req.Abort())
                     {
+                        EndPause(req, ph, null, ref start);
                         stats.Aborted = true;
                         break;
                     }
+                    if (UpdatePause(req, ph, null, ref start))
+                    {
+                        yield return null;
+                        continue;
+                    }
+                    float el = Time.realtimeSinceStartup - start;
                     if (!req.SelfPaced && el >= length)
                     {
                         break;
@@ -264,7 +278,11 @@ namespace Pano2StereoVR.Study
                     {
                         break;
                     }
-                    stats.FrameIntervalsMs.Add(Time.unscaledDeltaTime * 1000f);
+                    if (!ph.SkipInterval)
+                    {
+                        stats.FrameIntervalsMs.Add(Time.unscaledDeltaTime * 1000f);
+                    }
+                    ph.SkipInterval = false;
                     req.OnFrame?.Invoke(el, -1);
                     yield return null;
                 }
@@ -285,14 +303,21 @@ namespace Pano2StereoVR.Study
             var seen = new HashSet<long>();
             long last = -1;
             int wraps = 0;
+            var ps = new PauseState();
             while (true)
             {
-                float el = Time.realtimeSinceStartup - start;
                 if (req.Abort != null && req.Abort())
                 {
+                    EndPause(req, ps, null, ref start);
                     stats.Aborted = true;
                     break;
                 }
+                if (UpdatePause(req, ps, s.Player, ref start))
+                {
+                    yield return null;
+                    continue;
+                }
+                float el = Time.realtimeSinceStartup - start;
                 if (!req.SelfPaced && (s.Ended || el >= timeout))
                 {
                     break;
@@ -311,7 +336,11 @@ namespace Pano2StereoVR.Study
                     last = f;
                     seen.Add(wraps * Math.Max(1, frameCount) + f);
                 }
-                stats.FrameIntervalsMs.Add(Time.unscaledDeltaTime * 1000f);
+                if (!ps.SkipInterval)
+                {
+                    stats.FrameIntervalsMs.Add(Time.unscaledDeltaTime * 1000f); // the frame after a pause is not a frame interval
+                }
+                ps.SkipInterval = false;
                 req.OnFrame?.Invoke(el, f);
                 yield return null;
             }
@@ -329,6 +358,54 @@ namespace Pano2StereoVR.Study
             {
                 stats.Error = "timeout";
             }
+        }
+
+        private sealed class PauseState
+        {
+            public bool Paused;
+            public float Since;
+            public bool SkipInterval;
+        }
+
+        /// <summary>
+        /// Pause handling for one frame: starts or ends a pause as req.Paused asks (the video pauses and resumes at its
+        /// frame; the start time is shifted by the paused duration, so the viewing time excludes it). True while paused.
+        /// </summary>
+        private static bool UpdatePause(PlayRequest req, PauseState p, VideoPlayer player, ref float start)
+        {
+            bool want = req.Paused != null && req.Paused();
+            if (want && !p.Paused)
+            {
+                p.Paused = true;
+                p.Since = Time.realtimeSinceStartup;
+                if (player != null)
+                {
+                    player.Pause();
+                }
+                req.PauseChanged?.Invoke(true, p.Since - start);
+            }
+            else if (!want && p.Paused)
+            {
+                EndPause(req, p, player, ref start);
+            }
+            return p.Paused;
+        }
+
+        private static void EndPause(PlayRequest req, PauseState p, VideoPlayer player, ref float start)
+        {
+            if (!p.Paused)
+            {
+                return;
+            }
+            float now = Time.realtimeSinceStartup;
+            start += now - p.Since;
+            p.Paused = false;
+            p.SkipInterval = true;
+            if (player != null)
+            {
+                player.Play();
+            }
+            req.PauseChanged?.Invoke(false, now - start);
         }
 
         private static bool Advance(PlayRequest req, float elapsed, float minView, float maxView, ref bool allowed)

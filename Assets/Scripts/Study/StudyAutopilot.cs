@@ -19,7 +19,9 @@ namespace Pano2StereoVR.Study
     /// head for the orientation alignment (first off the reference, then on it until the dwell completes),
     /// lets the simulated head follow each natural-viewing-range sweep from 20 deg dot eccentricity on (three times
     /// the dot's further travel, never past the dot), so the head passes 3 deg at about 21 deg (the sweep stops there)
-    /// and the provisional rule gives a of about 21 and the PAw radius 20, presses "Next" on the eye-range result
+    /// and the provisional rule gives a of about 21 and the PAw radius 20, presses R in each headset-fitting step (the forward must be set before
+    /// Continue), uses the staff skip (F8, confirmed) once in Part 1 (group 2, clip 2)
+    /// and once in Part 2 (first main trial), presses "Next" on the eye-range result
     /// page (like any headset button), advances self-paced clips (same path as the trigger), replays and re-rates one clip once in the first
     /// Part 1 group summary, uses the QA "next group" control once (last Part 1 group), and screenshots every
     /// new screen, the alignment cross, the gaze-training dots, the gray gap and the left/right preview eye of
@@ -40,6 +42,8 @@ namespace Pano2StereoVR.Study
         private bool _rerateDone;
         private bool _replayDone;
         private bool _skipDone;
+        private bool _staffDone1;
+        private bool _staffDone2;
         private string _language = StudyTexts.Chinese;
         private readonly HashSet<string> _seen = new HashSet<string>();
         private readonly Dictionary<string, int> _counts = new Dictionary<string, int>();
@@ -274,6 +278,18 @@ namespace Pano2StereoVR.Study
                     continue;
                 }
 
+                // headset fitting (user 11-20): the experimenter sets the forward with R before Continue
+                if (step == "HmdFit" && !_ctrl.ForwardSetInStep && _ctrl.SessionDirectory.Length > 0)
+                {
+                    yield return new WaitForSecondsRealtime(0.5f);
+                    yield return Shot("hmdfit_before_R");
+                    Log("set forward (R)");
+                    _ctrl.RequestSetForward(false);
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    yield return Shot("hmdfit_forward_set");
+                    continue;
+                }
+
                 // natural viewing range: the simulated head follows the sweeping dot from 20 deg on (deterministic a, theta 20)
                 if (_ctrl.EyeRangeSweepActive)
                 {
@@ -297,6 +313,31 @@ namespace Pano2StereoVR.Study
                 if (step.StartsWith("Part:2", StringComparison.Ordinal) && Remember("paw_theta"))
                 {
                     Log("Part 2 PAw correction radius " + _ctrl.PawThetaDeg.ToString("0.##", CultureInfo.InvariantCulture) + " deg");
+                }
+
+                // staff skip (F8, user 11-20): once in Part 1 (group 2, clip 2) and once in Part 2 (first main trial), confirmed
+                if (_ctrl.StaffSkipAvailable && _ctrl.ClipVisible
+                    && ((!_staffDone1 && step.StartsWith("Part:1", StringComparison.Ordinal) && (_ctrl.CurrentTrial ?? "").StartsWith("group 2/", StringComparison.Ordinal)
+                         && (_ctrl.CurrentTrial ?? "").Contains(" clip 2/"))
+                        || (!_staffDone2 && step.StartsWith("Part:2", StringComparison.Ordinal) && (_ctrl.CurrentTrial ?? "").Contains(" main "))))
+                {
+                    bool part1 = step.StartsWith("Part:1", StringComparison.Ordinal);
+                    if (part1)
+                    {
+                        _staffDone1 = true;
+                    }
+                    else
+                    {
+                        _staffDone2 = true;
+                    }
+                    yield return new WaitForSecondsRealtime(0.5f);
+                    Log("staff skip (F8): " + _ctrl.CurrentTrial);
+                    _ctrl.RequestStaffSkipDialog();
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    yield return Shot("staff_skip_dialog_" + (part1 ? "part1" : "part2"));
+                    _ctrl.AnswerStaffSkip(true);
+                    yield return new WaitForSecondsRealtime(0.3f);
+                    continue;
                 }
 
                 // QA skip control: once, at the first clip of the last Part 1 group

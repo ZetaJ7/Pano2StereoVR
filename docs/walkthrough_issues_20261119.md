@@ -118,3 +118,12 @@
 11-20 头显实测第二轮修改说明（Claude）：第 59–61 条离线编译 0 错误，EditMode 测试全部通过；未在编辑器中运行。
 
 11-20 用户复查：主观实验流程基本没有问题；第二部分快进图标放大到原来的 1.5 倍（宽约 1.875°）。
+
+## 刺激存放与清单数量（11-20）
+
+| # | 步骤 | 问题（用户描述） | 理解与涉及文件 | 状态 |
+|---|---|---|---|---|
+| 62 | 刺激子文件夹 | **用户决定（11-19/11-20）**：正式刺激按类型放在刺激目录下的子文件夹（`part1/practice`、`part1/dummy`、`part1/virtual_indoor`、`part1/real_indoor`、`part1/real_outdoor`、`part2/practice`、`part2/near`）；清单中的文件名带子文件夹；程序在刺激目录下解析，包括缺失检查、清单校验和与日志；QA 测试片段写到同一结构 | 配置 `stimulus_folders`（按试次角色：第一部分练习、dummy、正式按片段 `cell`；第二部分练习、正式）与 `{folder}` 字段；`make_trial_plans.py`（`stim_folder`，只改文件名，不动随机顺序）；`StudyDataLogger.StimulusFullPath`、`RelativeStimulusName`（正斜杠换成系统分隔符，`Path.GetFullPath`）用于播放、缺失检查与 `stimuli_manifest_sha256`；`playback.csv` 的 `file` 改为带子文件夹的相对名（`PlaybackStats.FullPath`，`StudyClipPlayer.cs` 加一行）；`tools/make_test_clips.py` 按子文件夹建目录；自动驾驶在签到后记录缺失刺激数；测试（子文件夹解析、缺失检查与校验和；生成清单的文件夹）；README、`docs/subjective_study.md`、`docs/stimulus_plan_20261119.md` 第 9 节。本机 `Stimuli/` 根目录的测试片与样片需要用户移到对应子文件夹 | 已改（待复查） |
+| 63 | 清单数量 | **用户决定（11-20）**：正式至少 35 人，生成 P01–P40（4 的倍数，循环拉丁方）；预实验 T01–T05 单独放在 `StudyTools/plans_pilot`，不占正式编号 | P01–P40 写入 `StudyTools/plans`，T01–T05 写入 `StudyTools/plans_pilot`，AP01 重新生成；与提交 f9cb16f 比较，P01–P30 与 AP01 除文件名的子文件夹、配置校验和与生成时间外完全相同；第一部分正式组中每个条件在组内每个位置的次数：P01–P40 各 90 次（每人 2 或 3 次：12 个格 2 次、4 个格 3 次），P01–P30 为 67–68 次；第二部分相同配对 PA–PA 与 PAw–PAw 各 120 个，真实配对先 PA 与先 PAw 各 240 个；测试检查 P01–P40 与 T01–T05 的文件及上述平衡 | 已改 |
+
+11-20 修改说明（Claude）：第 62–63 条离线编译 0 错误，EditMode 测试全部通过；模拟数据 + 分析端到端通过。

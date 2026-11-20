@@ -419,6 +419,12 @@ namespace Pano2StereoVR.Study
                     }
                     Press(c, "Btn_Load");
                     yield return new WaitForSecondsRealtime(0.5f);
+                    if (_ctrl.PlanLoaded)
+                    {
+                        // plan names carry subfolders (part1/..., part2/...); test clips: tools/make_test_clips.py --out <stimuli dir>
+                        Log("plan loaded; " + _ctrl.MissingStimuliCount + " stimulus file(s) missing under " + _ctrl.StimuliDirectory
+                            + " (QA mode plays placeholders)");
+                    }
                 }
                 foreach (Toggle t in c.GetComponentsInChildren<Toggle>())
                 {

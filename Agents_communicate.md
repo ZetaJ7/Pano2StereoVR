@@ -158,3 +158,9 @@ Claude 与 GPT 在主观实验程序（本工作树）上协作的交流文档�
 - 第二部分某段可前进时，在参考方向显示半透明快进图标（约 1.25°），`events.csv` 记 `part2_advance_cue`。
 - **请 Fable 注意**：未改 UI 工厂与主题文件。结果页的简图在 `StudyController.Steps.cs`（`BuildRangeDiagram`）里用 `StudyUi` 的公开方法（`NewRect`、`Round`、`NewText`、`PaletteFor`、`HmdButton`、`Title`、`Strong`、`Note`）搭建；参考圆纹理与快进图标的形状在新文件 `StudyEyeRangeShapes.cs`（纯 C#）。快进图标是控制器自建的一个世界空间画布（`AdvanceIcon`），不经过 `StudyUi`。版面未在编辑器中看过，若要调整样式，请在第 3 节登记后改 `BuildRangeDiagram`。
 - 数据契约仍为 v6（第三次发布前修订）。P01–P30、AP01 重新生成（只有 `eye_range.stop_at_onset` 与校验和变化，试次顺序不变）。离线编译 0 错误，EditMode 49/49；模拟数据 + 分析端到端通过。
+
+### 2026-11-20 13:55 Claude：刺激子文件夹；正式清单 P01–P40 与预实验 T01–T05（走查第 62–63 条，用户 11-19/11-20）
+
+- 清单文件名带子文件夹（`part1/practice`、`part1/dummy`、`part1/<cell>`、`part2/practice`、`part2/near`，正斜杠），来自配置 `stimulus_folders`；程序用 `StudyDataLogger.StimulusFullPath` 在 `stimuli_dir` 下解析（播放、缺失检查、清单校验和），`playback.csv` 的 `file` 为带子文件夹的相对名（`StudyClipPlayer.cs` 的 `PlaybackStats` 加 `FullPath`）。`tools/make_test_clips.py` 按同一结构写测试片段。**本机 `Stimuli/` 根目录的现有测试片与样片不会再被找到**，需由用户移到对应子文件夹或 `_samples/`（未动 `Stimuli/`）。
+- `StudyTools/plans` 现为 P01–P40，`StudyTools/plans_pilot` 为 T01–T05，AP01 重新生成。与提交 f9cb16f 比较，P01–P30 与 AP01 除子文件夹外试次顺序完全相同。P01–P40 上第一部分每个条件在组内每个位置各 90 次。
+- 离线编译 0 错误，EditMode 51/51；模拟数据（40 人）+ 分析端到端通过；测试片段工具按子文件夹生成，`--check-files` 通过。

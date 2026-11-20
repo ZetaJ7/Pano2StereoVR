@@ -1,6 +1,7 @@
 """Write small synthetic top-bottom stereo ERP clips for checking the Unity study flow on the desktop.
 
-Every stimulus file named in the plans (every PAw correction-radius variant) gets a 3 s, 25 fps, 1024x1024 H.264 clip (left eye on top):
+Every stimulus file named in the plans (every PAw correction-radius variant, in its subfolder such as
+part1/practice/ or part2/near/) gets a 3 s, 25 fps, 1024x1024 H.264 clip (left eye on top):
 a latitude/longitude grid, "FRONT"/"LEFT"/"RIGHT"/"BACK" labels at 0/-90/+90/180 deg longitude, the clip id
 and condition, the eye letter, and a frame counter. A box in front (0 deg) carries a small crossed disparity,
 so it should appear nearer than the grid in the headset. These clips are test material only.
@@ -78,9 +79,10 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     f_small = font(20)
     for name in sorted(files):
-        out = args.out / name
+        out = args.out / name  # names carry subfolders (part1/..., part2/...), user 11-20
         if out.exists():
             continue
+        out.parent.mkdir(parents=True, exist_ok=True)
         label = Path(name).stem.replace("__", "  /  ")
         left = eye_image(label, "L", args.disparity_px)
         right = eye_image(label, "R", args.disparity_px)

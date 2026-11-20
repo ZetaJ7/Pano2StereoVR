@@ -1,8 +1,14 @@
 """Generate reproducible per-participant trial plans for the Pano2Stereo subjective study.
 
 Usage:
-    python make_trial_plans.py --config study_config.json --participants P01-P30 --out plans
+    python make_trial_plans.py --config study_config.json --participants P01-P40 --out plans
+    python make_trial_plans.py --config study_config.json --participants T01-T05 --out plans_pilot
     python make_trial_plans.py --config study_config.json --participants P01,P02 --out plans --check-files
+
+Stimulus names in the plans are relative to the stimuli folder and include a subfolder (forward slashes,
+user 11-20) from the config "stimulus_folders": Part 1 training -> part1/practice, dummy -> part1/dummy,
+main -> part1/<clip cell>; Part 2 training -> part2/practice, main -> part2/near (field {folder} of the
+file patterns). The subfolders do not change any random order.
 
 Each plan is a JSON file read by the Unity study mode. The random order depends only on
 (study_id, config_version, participant_id), so a plan can be regenerated exactly.
@@ -128,11 +134,27 @@ def participant_number(pid: str, seed: int) -> int:
     return int(digits[-1]) if digits else seed
 
 
-def stim_file(cfg: dict, clip_id: str, condition: str, patterns: dict | None = None) -> str:
-    """File name of a stimulus; a per-condition pattern (part2.file_patterns) overrides file_pattern. A
-    {paw_theta} field in the pattern is kept as the placeholder and resolved by the study program."""
+def stim_folder(cfg: dict, part: int, block: str, cell: str = "") -> str:
+    """Subfolder of a stimulus under the stimuli folder from config "stimulus_folders" (user 11-20), e.g.
+    part1/practice, part1/dummy, part1/<cell>, part2/practice, part2/near; "" when the config has none."""
+    folders = cfg.get("stimulus_folders", {}).get(f"part{part}", {})
+    template = folders.get(block)
+    if template is None:
+        if folders:
+            raise SystemExit(f"stimulus_folders.part{part} has no entry for block '{block}'")
+        return ""
+    if "{cell}" in template and not cell:
+        raise SystemExit(f"stimulus_folders.part{part}.{block} needs the clip cell, but the clip has none")
+    return template.format(cell=cell).strip("/")
+
+
+def stim_file(cfg: dict, clip_id: str, condition: str, patterns: dict | None = None, folder: str = "") -> str:
+    """Stimulus name relative to the stimuli folder (forward slashes); a per-condition pattern
+    (part2.file_patterns) overrides file_pattern. A {paw_theta} field in the pattern is kept as the
+    placeholder and resolved by the study program; {folder} is the subfolder from stim_folder."""
     pattern = (patterns or {}).get(condition, cfg["file_pattern"])
-    return pattern.format(clip_id=clip_id, condition=condition, paw_theta=PAW_THETA_PLACEHOLDER)
+    name = pattern.format(clip_id=clip_id, condition=condition, paw_theta=PAW_THETA_PLACEHOLDER, folder=folder)
+    return name.lstrip("/")
 
 
 def format_theta(theta: float) -> str:
@@ -231,7 +253,7 @@ def build_part1(cfg: dict, rng: random.Random, pnum: int) -> tuple[list[dict], i
             trials.append(t)
     for i, t in enumerate(trials):
         t["index"] = i
-        t["file"] = stim_file(cfg, t["clip_id"], t["condition"])
+        t["file"] = stim_file(cfg, t["clip_id"], t["condition"], folder=stim_folder(cfg, 1, t["block"], t.get("cell", "")))
     return trials, len(groups)
 
 
@@ -261,8 +283,9 @@ def build_part2(cfg: dict, rng: random.Random, pnum: int) -> list[dict]:
     for i, t in enumerate(trials):
         t["index"] = i
         t["pair_type"] = "same" if t["cond_a"] == t["cond_b"] else "real"
-        t["file_a"] = stim_file(cfg, t["clip_id"], t["cond_a"], patterns)
-        t["file_b"] = stim_file(cfg, t["clip_id"], t["cond_b"], patterns)
+        folder = stim_folder(cfg, 2, t["block"], t.get("cell", ""))
+        t["file_a"] = stim_file(cfg, t["clip_id"], t["cond_a"], patterns, folder)
+        t["file_b"] = stim_file(cfg, t["clip_id"], t["cond_b"], patterns, folder)
     return trials
 
 

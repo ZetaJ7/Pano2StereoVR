@@ -105,6 +105,9 @@ namespace Pano2StereoVR.Study
         public string Language => _s.Language;
         public string Mode => _settings != null ? _settings.Mode : "";
         public int SessionGeneration => _s.Generation;
+        /// <summary>Stimulus files of the loaded plan that are missing under the stimuli folder (all PAw variants counted).</summary>
+        public int MissingStimuliCount => _s.MissingStimuli.Count;
+        public string StimuliDirectory => _settings != null ? _settings.StimuliDir : "";
         public bool Restarting => _restarting;
         /// <summary>The orientation cross is waiting for the head to stay within the alignment tolerance.</summary>
         public bool Aligning => _aligning;
@@ -1065,9 +1068,10 @@ namespace Pano2StereoVR.Study
             return Math.Round(v, digits);
         }
 
+        /// <summary>Full path of a plan stimulus; plan names may contain subfolders with forward slashes (user 11-20).</summary>
         private string StimulusPath(string file)
         {
-            return string.IsNullOrEmpty(file) ? "" : Path.Combine(_settings.StimuliDir, file);
+            return StudyDataLogger.StimulusFullPath(_settings.StimuliDir, file);
         }
 
         private void SetSphereTexture(Texture tex)
@@ -1105,6 +1109,10 @@ namespace Pano2StereoVR.Study
         private void WritePlayback(int part, int trialIndex, string segment, PlaybackStats st)
         {
             _s.DroppedTotal += st.FramesDropped;
+            if (!string.IsNullOrEmpty(st.FullPath))
+            {
+                st.File = StudyDataLogger.RelativeStimulusName(_settings.StimuliDir, st.FullPath); // with its subfolder, as in the plan
+            }
             _s.Log.Playback.Append(_s.Plan.ParticipantId, part, trialIndex, segment, st.File, st.FramesExpected, st.FramesShown,
                 st.FramesDropped, st.DtMeanMs, st.DtP99Ms);
             if (st.Missing || !string.IsNullOrEmpty(st.Error))

@@ -2,10 +2,10 @@
   "plan_format_version": 5,
   "study_id": "Pano2Stereo-E5",
   "config_version": "autopilot-desktop-check-2026-11-19c",
-  "config_sha256": "a9688b1b7e8f14373110bbe366be92eb6a814439968bd36d8f9b835e9388358c",
+  "config_sha256": "1eca25afcdadc36b78e5107f0b8ae4f91797571878dc5dfb197c0335fde524d0",
   "participant_id": "AP01",
   "seed": 103066360963394,
-  "generated_utc": "2026-11-20T07:11:40+00:00",
+  "generated_utc": "2026-11-20T08:11:23+00:00",
   "timing": {
     "clip_s": 3.0,
     "gap_between_ab_s": 1.0,
@@ -181,7 +181,7 @@
           "group_size": 0,
           "position_in_group": 0,
           "index": 0,
-          "file": "train_indoor__ours.mp4"
+          "file": "part1/practice/train_indoor__ours.mp4"
         },
         {
           "block": "dummy",
@@ -194,7 +194,7 @@
           "group_size": 1,
           "position_in_group": 0,
           "index": 1,
-          "file": "dummy_indoor__mono.mp4"
+          "file": "part1/dummy/dummy_indoor__mono.mp4"
         },
         {
           "block": "main",
@@ -207,7 +207,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 2,
-          "file": "vin_A__deepsynthesis.mp4"
+          "file": "part1/virtual_indoor/vin_A__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -220,7 +220,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 3,
-          "file": "vin_A__motionparallax.mp4"
+          "file": "part1/virtual_indoor/vin_A__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -233,7 +233,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 4,
-          "file": "vin_A__mono.mp4"
+          "file": "part1/virtual_indoor/vin_A__mono.mp4"
         },
         {
           "block": "main",
@@ -246,7 +246,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 5,
-          "file": "vin_A__ours.mp4"
+          "file": "part1/virtual_indoor/vin_A__ours.mp4"
         },
         {
           "block": "main",
@@ -259,7 +259,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 6,
-          "file": "rout_A__ours.mp4"
+          "file": "part1/real_outdoor/rout_A__ours.mp4"
         },
         {
           "block": "main",
@@ -272,7 +272,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 7,
-          "file": "rout_A__deepsynthesis.mp4"
+          "file": "part1/real_outdoor/rout_A__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -285,7 +285,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 8,
-          "file": "rout_A__motionparallax.mp4"
+          "file": "part1/real_outdoor/rout_A__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -298,7 +298,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 9,
-          "file": "rout_A__mono.mp4"
+          "file": "part1/real_outdoor/rout_A__mono.mp4"
         }
       ]
     },
@@ -320,8 +320,8 @@
           "reference_pitch_deg": 0.0,
           "index": 0,
           "pair_type": "real",
-          "file_a": "train_near__pa.mp4",
-          "file_b": "train_near__paw_t{paw_theta}.mp4"
+          "file_a": "part2/practice/train_near__pa.mp4",
+          "file_b": "part2/practice/train_near__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -334,8 +334,8 @@
           "scene": "indoor",
           "index": 1,
           "pair_type": "real",
-          "file_a": "near_A__paw_t{paw_theta}.mp4",
-          "file_b": "near_A__pa.mp4"
+          "file_a": "part2/near/near_A__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_A__pa.mp4"
         },
         {
           "block": "main",
@@ -348,8 +348,8 @@
           "scene": "indoor",
           "index": 2,
           "pair_type": "same",
-          "file_a": "near_B__pa.mp4",
-          "file_b": "near_B__pa.mp4"
+          "file_a": "part2/near/near_B__pa.mp4",
+          "file_b": "part2/near/near_B__pa.mp4"
         },
         {
           "block": "main",
@@ -362,8 +362,8 @@
           "scene": "indoor",
           "index": 3,
           "pair_type": "same",
-          "file_a": "near_A__paw_t{paw_theta}.mp4",
-          "file_b": "near_A__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_A__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_A__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -376,8 +376,8 @@
           "scene": "indoor",
           "index": 4,
           "pair_type": "real",
-          "file_a": "near_B__pa.mp4",
-          "file_b": "near_B__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_B__pa.mp4",
+          "file_b": "part2/near/near_B__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -390,8 +390,8 @@
           "scene": "indoor",
           "index": 5,
           "pair_type": "real",
-          "file_a": "near_A__pa.mp4",
-          "file_b": "near_A__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_A__pa.mp4",
+          "file_b": "part2/near/near_A__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -404,8 +404,8 @@
           "scene": "indoor",
           "index": 6,
           "pair_type": "real",
-          "file_a": "near_B__paw_t{paw_theta}.mp4",
-          "file_b": "near_B__pa.mp4"
+          "file_a": "part2/near/near_B__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_B__pa.mp4"
         }
       ]
     }

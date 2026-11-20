@@ -111,4 +111,17 @@
 
 ## 9. 正式刺激在本机的存放（用户 11-20：全部准备好后下载到 _study 目录，按类型存好）
 
-建议结构：`Stimuli/part1/{virtual_indoor,real_indoor,real_outdoor,dummy,practice}/`、`Stimuli/part2/{near,practice}/`，文件名不变（`<clip_id>__<condition>.mp4`），根目录放 `manifest.json`（每个文件的来源序列、窗口、方法、版本、生成命令、分辨率、帧数、sha256）；清单配置的 `file_pattern` 改为带子目录（重新生成清单，只改 `file` 字段）；测试片与样片移到 `Stimuli/_samples/`。
+结构：`Stimuli/part1/{virtual_indoor,real_indoor,real_outdoor,dummy,practice}/`、`Stimuli/part2/{near,practice}/`，文件名不变（`<clip_id>__<condition>.mp4`，第二部分 PAw 为 `<clip_id>__paw_t<θ>.mp4`），根目录放 `manifest.json`（每个文件的来源序列、窗口、方法、版本、生成命令、分辨率、帧数、sha256）；测试片与样片移到 `Stimuli/_samples/`。
+
+已实现（用户 11-19/11-20）：配置 `stimulus_folders` 与 `file_pattern = "{folder}/{clip_id}__{condition}.mp4"`，清单的 `file`、`file_a`、`file_b` 带子文件夹（正斜杠）；P01–P40、T01–T05（`StudyTools/plans_pilot`）、AP01 已重新生成，P01–P30 与 AP01 除文件名的子文件夹外与上一版完全相同。程序在 `stimuli_dir` 下解析这些相对名。本机 `Stimuli/` 根目录现有的测试片与样片（如 `train_indoor__ours.mp4`、`dummy_indoor__*.mp4`、`rout_B__*.mp4`）需要由用户移到对应子文件夹（或 `_samples/`），否则 QA 模式会播放占位图案。
+
+```text
+Stimuli/
+  part1/practice/        train_indoor__ours.mp4、train_outdoor__mono.mp4
+  part1/dummy/           dummy_indoor__<condition>.mp4
+  part1/virtual_indoor/  vin_*__<condition>.mp4
+  part1/real_indoor/     rin_*__<condition>.mp4
+  part1/real_outdoor/    rout_*__<condition>.mp4
+  part2/practice/        train_near__pa.mp4、train_near__paw_t<θ>.mp4
+  part2/near/            near_*__pa.mp4、near_*__paw_t<θ>.mp4
+```

@@ -8,7 +8,10 @@
 
 ```powershell
 # 1. 按被试编号生成试次清单（可复现：同一 study_id、config_version、被试编号得到同一顺序）
-python make_trial_plans.py --config study_config.json --participants P01-P30 --out plans --check-files
+#    正式 P01–P40（用户 11-20：至少 35 人；40 为 4 的倍数，循环拉丁方完全平衡），预实验 T01–T05 放在单独的文件夹，不占正式编号
+python make_trial_plans.py --config study_config.example.json --participants P01-P40 --out plans --check-files
+python make_trial_plans.py --config study_config.example.json --participants T01-T05 --out plans_pilot
+#    预实验会话：study_settings.json 设 "plans_dir": "StudyTools/plans_pilot"（或命令行 --plans-dir），数据建议另设 data_dir
 
 # 2. Unity 实验模式读取 plans/<被试编号>.json，数据写到 StudyData/<被试编号>/
 
@@ -39,6 +42,7 @@ QA 模式下电脑端状态栏有“跳到下一组”（PgDn）与“跳到下�
 - `stereotest`：视差以显示像素计（`practice_disparity_px` 8，`disparities_px` [4, 2, 1]，`repeats_per_level` 2，点大小 `dot_px` 3）。程序运行时由 XR 左眼投影矩阵与眼图纹理宽度算出视野中心一个渲染像素的角宽（无 XR 时用 `display_fallback` 的每眼宽度与水平视场），测试图纹理按“1 texel ≈ 1 像素”取尺寸，并把像素与角秒写入 `stereotest.csv`。被试可选“看不清”（`cant_tell`），计为不正确。程序不含通过标准。
 - `gaze_training`：黄十字在参考方向，`n_dots` 个不同颜色的点在半径 `radius_deg` 的圆上依次亮起，每点 `dwell_s` 秒；记录每点期间头部相对参考方向的最大偏离；头部偏离一旦超过 `max_head_deviation_deg`，立即中断本次练习并提示重做，最多 `max_attempts` 次，最后一次仍超过时继续实验并在数据中标记。
 - `eye_range`（用户 11-20，连续扫动 `mode = continuous`；第一版的离散圆点方式已删除）：`directions_deg`（8 个方向，0° = 上、顺时针，与注视练习圆点相同）× `repeats`（2）= 16 次扫动，顺序按被试随机（由被试种子派生的独立随机流，其余部分的顺序不变）；圆点以 `speed_deg_s`（8°/s）从 0° 匀速移到 `max_eccentricity_deg`（40°），每次 5 s；`dot_size_deg` 1.5、`align_dwell_s` 0.5 s、`gap_s` 0.3 s。每次扫动的 `head_onset_ecc_deg` = 头部相对扫动开始时朝向的大圆角转动（`measure = head_rot_deg`）首次超过 `head_threshold_deg` 时圆点的偏心度；`stop_at_onset`（true，用户 11-20）时扫动在这一帧结束；到最大偏心度仍未超过记为删失。a 的规则 `rule = median_onset_ecc`（暂定）：全部扫动 `head_onset_ecc_deg` 的中位数，删失按 `max_eccentricity_deg` 计。`head_threshold_deg` 3.0° 为暂定值，预实验后再定；逐帧原始数据保留在 `eyerange_trace.csv`，规则可事后更改。PAw 修正半径 θ 取 `paw_theta_variants_deg`（10、15、20、25、30°；衰减带 5° 不变）中最接近 a 的一个（超出范围取端点，距离相同取较小者）；步骤关闭、不在流程中或被跳过时用 `default_paw_theta_deg`（15°，论文默认值），并记入 `events.csv` 与 `session.json`。速度、最大偏心度、次数、圆点大小、对准保持与间隔为预实验用值，预实验后按实测调整。
+- `stimulus_folders`（用户 11-20）：各部分按试次角色（`training`、`dummy`、`main`）给出子文件夹，`main` 可用 `{cell}`；`file_pattern` 与 `part2.file_patterns` 中的 `{folder}` 替换为该子文件夹。只影响文件名，不影响任何随机顺序。
 - `part2.file_patterns`：按条件覆盖 `file_pattern`；`paw` 为 `{clip_id}__paw_t{paw_theta}.mp4`。清单中 `{paw_theta}` 保留为占位符，程序在自然注视范围测量后替换为被试的 θ（如 `near_A__paw_t20.mp4`）；PA 文件名不变。签到时的缺失刺激检查与 `make_trial_plans.py --check-files` 覆盖全部 θ 变体。
 - `alignment`：第二部分每个试次与注视练习开始前，被试把头转向黄十字；头部在参考方向 `tolerance_deg` 内连续保持 `dwell_s` 秒后自动开始（不需按扳机），中途离开则重新计时。进入范围时十字变绿，外圈进度环随保持时间点亮，提示中显示当前偏离。`tolerance_deg` 5° 为用户 11-19 暂定，实测后再调整；`dwell_s` 1.0 s。
 - `part1.viewing`、`part2.viewing`：`self_paced`（播完一遍后循环，按扳机或空格进入下一段）、`min_view_s`（`null` = 完整播放一遍）、`max_view_s`（0 = 不限）；`part1.viewing.allow_review_on_rerate`（组末汇总每段可“回放”，用户 11-19 决定开启）。
@@ -49,7 +53,20 @@ QA 模式下电脑端状态栏有“跳到下一组”（PgDn）与“跳到下�
 
 ## 刺激文件
 
-`Stimuli/<clip_id>__<condition>.mp4`。上下排列立体 ERP（上半为左眼），HEVC。条件名：第一部分 `mono`、`ours`、`deepsynthesis`、`motionparallax`；第二部分 `pa`、`paw`。第二部分 PAw 按修正半径分 5 个变体：`Stimuli/<clip_id>__paw_t<θ>.mp4`（θ = 10、15、20、25、30，如 `near_A__paw_t20.mp4`），第二部分全部片段（含练习 `train_near`）都需要 5 个变体与 1 个 PA。
+刺激放在 `stimuli_dir`（默认 `Stimuli/`）下按类型分的子文件夹（用户 11-19/11-20，`docs/stimulus_plan_20261119.md` 第 9 节），清单中的文件名带子文件夹（正斜杠），由配置的 `stimulus_folders` 按试次角色生成：第一部分练习 `part1/practice`、dummy `part1/dummy`、正式按片段的 `cell`（`part1/virtual_indoor`、`part1/real_indoor`、`part1/real_outdoor`）；第二部分练习 `part2/practice`、正式 `part2/near`。程序在 `stimuli_dir` 下解析（Windows 上换成反斜杠），缺失检查、`stimuli_manifest_sha256` 与 `playback.csv` 的 `file` 都用带子文件夹的相对名。
+
+```text
+Stimuli/
+  part1/practice/        train_indoor__ours.mp4、train_outdoor__mono.mp4
+  part1/dummy/           dummy_indoor__<condition>.mp4
+  part1/virtual_indoor/  vin_*__<condition>.mp4
+  part1/real_indoor/     rin_*__<condition>.mp4
+  part1/real_outdoor/    rout_*__<condition>.mp4
+  part2/practice/        train_near__pa.mp4、train_near__paw_t<θ>.mp4
+  part2/near/            near_*__pa.mp4、near_*__paw_t<θ>.mp4
+```
+
+文件名 `<clip_id>__<condition>.mp4`。上下排列立体 ERP（上半为左眼），HEVC。条件名：第一部分 `mono`、`ours`、`deepsynthesis`、`motionparallax`；第二部分 `pa`、`paw`。第二部分 PAw 按修正半径分 5 个变体：`<clip_id>__paw_t<θ>.mp4`（θ = 10、15、20、25、30，如 `near_A__paw_t20.mp4`），第二部分全部片段（含练习 `train_near`）都需要 5 个变体与 1 个 PA。 QA 用的测试片段：`python tools/make_test_clips.py --plans StudyTools/plans --out Stimuli`（按同一子文件夹写入；原先放在 `Stimuli/` 根目录的测试片段与样片不会被找到，需要移到对应子文件夹或移到 `Stimuli/_samples/`）。
 
 ## 第一部分评分项与数据字段（11-19 第二轮改名）
 
@@ -85,7 +102,7 @@ v4 相对 v3：`stereotest.csv`、`part1.csv`、`part2.csv` 增加 `skipped`；`
 | `part2.csv` | `participant_id, block, trial_index, clip_id, cond_a, cond_b, pair_type, different, preference, rt_q1_s, rt_q2_s, view_a_s, view_b_s, loops_a, loops_b, max_dev_a_deg, max_dev_b_deg, align_s, start_dev_deg, restarts_a, restarts_b, reminder_off_a, reminder_off_b, paw_theta_deg, skipped`；`paw_theta_deg` 为本会话的 PAw 修正半径（每行相同，PA–PA 配对也写）；A = 前一段、B = 后一段（界面只说“前一段 / 后一段”）；`pair_type` 为 `real` / `same`；`different` 为 1/0；`preference` 为 −3（前一段好得多）到 +3（后一段好得多），答"没有区别"时留空；`align_s` 为朝向对准耗时（从十字出现到自动开始），`start_dev_deg` 为开始时头部相对参考方向的偏离；`skipped` 为 1 时为 QA 跳过；`view_*_s` 为该段实际观看时长，`loops_*` 为完整播放遍数，`max_dev_*_deg` 为该段头部相对参考方向的最大偏离；播放中头部偏离一旦超过注视练习的阈值 `max_head_deviation_deg`，该段立即中断，提示后重新对准并从头重播，`restarts_*` 为该段的重播次数，`view_*`、`loops_*`、`max_dev_*` 只描述最后完整的一次观看；同一段重播 3 次后再转头，被试选择“不再提醒”或“继续努力调整”：选前者则该段从头再播一次，第二部分余下的播放不再因转头中断，`reminder_off_*` 为 1 表示该段最后完整的一次观看是在关闭提醒后播放的（选择记入 `events.csv` 的 `part2_reminder_choice` 与 `session.json` 的 `part2_reminder_off`） |
 | `ssq.csv` | `participant_id, measurement, GD, FA, HE, ES, DF, IS, SW, NA, CO, FH, BV, DO, DC, VE, SA, BU`；`measurement` 为 `S_pre` / `S_mid1`（第一部分后）/ `S_mid2`（休息后、第二部分前）/ `S_post`（v3 及以前为 `S_mid`）；每项 0–3；QA 跳过的 SSQ 不写行 |
 | `headpose.csv` | `participant_id, part, trial_index, segment, t_s, video_frame, yaw_deg, pitch_deg, roll_deg`；每个显示帧一行；`segment` 第一部分为 `clip`（回放为 `replay`），第二部分为 `A` / `B`（因头部转动中断的观看为 `A_stopped` / `B_stopped`）；**第二部分的 yaw、pitch 相对该片段的参考方向** |
-| `playback.csv` | `participant_id, part, trial_index, segment, file, frames_expected, frames_shown, frames_dropped, dt_mean_ms, dt_p99_ms`；自定节奏（循环）播放时 `frames_expected` 为观看时长 × 片段帧率，`frames_shown` 为显示过的（遍数, 帧号）组合数 |
+| `playback.csv` | `participant_id, part, trial_index, segment, file, frames_expected, frames_shown, frames_dropped, dt_mean_ms, dt_p99_ms`；`file` 为相对 `stimuli_dir` 的文件名（带子文件夹，正斜杠，第二部分为替换 θ 后的名字）；自定节奏（循环）播放时 `frames_expected` 为观看时长 × 片段帧率，`frames_shown` 为显示过的（遍数, 帧号）组合数 |
 | `postquestionnaire.json` | 事后问卷只有一道开放问题（反馈与不舒服的地方，选填）：`participant_id`、`comments`、`timestamp_utc` |
 | `events.csv` | `t_utc, event, detail`；语言、清单加载（含清单文件 SHA-256）、缺失刺激清单、清单摘要、步骤开始结束、重定向、休息起止与时长、注视练习对准与每次结果、重评、回放、QA 跳过（`qa_skip*`）、播放异常、写盘与备份结果、结束页操作（退出、重新开始） |
 | `session.json` 另含 | `flow`、`part_order`、`plan_format_version`、`data_contract_version`、`settings_source`、`stimuli_dir` |

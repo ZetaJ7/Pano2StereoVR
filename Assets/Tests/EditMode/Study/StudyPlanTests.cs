@@ -217,6 +217,38 @@ namespace Pano2StereoVR.Study.Tests
         }
 
         [Test]
+        public void FormalAndPilotPlansAreSeparate()
+        {
+            // user 11-20: formal P01-P40 (a multiple of 4 for the cyclic Latin square), pilot T01-T05 in their own folder
+            string root = TestPaths.ProjectRoot();
+            string formal = Path.Combine(root, "StudyTools", "plans");
+            string pilot = Path.Combine(root, "StudyTools", "plans_pilot");
+            if (!Directory.Exists(formal) || !Directory.Exists(pilot))
+            {
+                Assert.Ignore("plans or plans_pilot not generated");
+            }
+            CollectionAssert.AreEquivalent(Enumerable.Range(1, 40).Select(i => "P" + i.ToString("00")).ToArray(),
+                Directory.GetFiles(formal, "*.json").Select(Path.GetFileNameWithoutExtension).ToArray());
+            CollectionAssert.AreEquivalent(Enumerable.Range(1, 5).Select(i => "T" + i.ToString("00")).ToArray(),
+                Directory.GetFiles(pilot, "*.json").Select(Path.GetFileNameWithoutExtension).ToArray());
+            Assert.AreEqual("T03", StudyPlan.Load(Path.Combine(pilot, "T03.json")).ParticipantId);
+
+            // over P01-P40 every condition takes every within-group position equally often in the Part 1 main groups
+            var counts = new Dictionary<string, int>();
+            for (int i = 1; i <= 40; i++)
+            {
+                StudyPlan p = StudyPlan.Load(Path.Combine(formal, "P" + i.ToString("00") + ".json"));
+                foreach (StudyTrial t in p.GetPart(1).Trials.Where(t => t.IsMain))
+                {
+                    string k = t.Condition + "@" + t.PositionInGroup;
+                    counts[k] = counts.TryGetValue(k, out int n) ? n + 1 : 1;
+                }
+            }
+            Assert.AreEqual(16, counts.Count);
+            Assert.IsTrue(counts.Values.All(v => v == 90), string.Join(" ", counts.Select(kv => kv.Key + "=" + kv.Value)));
+        }
+
+        [Test]
         public void GeneratedPlanFromStudyToolsMatchesTheDesign()
         {
             string path = Path.Combine(TestPaths.ProjectRoot(), "StudyTools", "plans", "P01.json");
@@ -290,18 +322,29 @@ namespace Pano2StereoVR.Study.Tests
                 }
             }
 
-            // Part 2: PAw names carry the radius placeholder (every clip incl. the practice), PA names do not
+            // Part 2: PAw names carry the radius placeholder (every clip incl. the practice), PA names do not;
+            // stimuli sit in subfolders by role (user 11-20): part2/practice, part2/near
             foreach (StudyTrial t in part2.Trials)
             {
+                string folder = t.IsMain ? "part2/near/" : "part2/practice/";
                 foreach (KeyValuePair<string, string> cf in new[] { new KeyValuePair<string, string>(t.CondA, t.FileA), new KeyValuePair<string, string>(t.CondB, t.FileB) })
                 {
-                    Assert.AreEqual(cf.Key == "paw" ? t.ClipId + "__paw_t{paw_theta}.mp4" : t.ClipId + "__pa.mp4", cf.Value);
+                    Assert.AreEqual(folder + (cf.Key == "paw" ? t.ClipId + "__paw_t{paw_theta}.mp4" : t.ClipId + "__pa.mp4"), cf.Value);
                 }
             }
+            // Part 1: part1/practice, part1/dummy, and part1/<clip cell> for the main clips
+            foreach (StudyTrial t in part1.Trials)
+            {
+                string folder = t.Block == "training" ? "part1/practice" : t.Block == "dummy" ? "part1/dummy" : "part1/" + t.Cell;
+                Assert.AreEqual(folder + "/" + t.ClipId + "__" + t.Condition + ".mp4", t.File);
+            }
+            CollectionAssert.AreEquivalent(new[] { "part1/virtual_indoor", "part1/real_indoor", "part1/real_outdoor" },
+                part1.Trials.Where(t => t.IsMain).Select(t => t.File.Substring(0, t.File.LastIndexOf('/'))).Distinct().ToArray());
             List<string> files = plan.AllStimulusFiles().ToList();
             Assert.AreEqual(7 * 6 + 2 + 4 + 36, files.Count, "Part 2: 7 clips x (PA + 5 PAw); Part 1: 2 practice + 4 dummy + 36");
-            Assert.IsTrue(files.Contains("train_near__paw_t30.mp4") && files.Contains("near_F__paw_t10.mp4"));
-            Assert.IsFalse(files.Any(f => f.Contains("{")));
+            Assert.IsTrue(files.Contains("part2/practice/train_near__paw_t30.mp4") && files.Contains("part2/near/near_F__paw_t10.mp4"));
+            Assert.IsTrue(files.Contains("part1/practice/train_indoor__ours.mp4") && files.Contains("part1/dummy/dummy_indoor__mono.mp4"));
+            Assert.IsFalse(files.Any(f => f.Contains("{") || f.Contains("\\")));
 
             // Part 2: the same clip never appears in two consecutive main trials
             var main2 = part2.Trials.Where(t => t.IsMain).ToList();

@@ -355,20 +355,57 @@ namespace Pano2StereoVR.Study
             }
         }
 
-        /// <summary>Stimulus files of a plan that do not exist under the stimuli folder.</summary>
-        public static List<string> MissingStimuli(string stimuliDir, IEnumerable<string> files)
+        /// <summary>
+        /// Full path of a stimulus named relative to the stimuli folder. Plans use forward slashes for the subfolders
+        /// (e.g. "part1/practice/train_indoor__ours.mp4", user 11-20); they are turned into the platform separator.
+        /// </summary>
+        public static string StimulusFullPath(string stimuliDir, string file)
         {
-            return files.Where(f => !File.Exists(Path.Combine(stimuliDir, f))).OrderBy(x => x, StringComparer.Ordinal).ToList();
+            if (string.IsNullOrEmpty(file))
+            {
+                return "";
+            }
+            string rel = file.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            return Path.GetFullPath(Path.Combine(stimuliDir, rel));
         }
 
-        /// <summary>Hash of stimulus file names and sizes (contents are not read; 4K files are large).</summary>
+        /// <summary>
+        /// Name of a stimulus relative to the stimuli folder with forward slashes (as in the plan), for the logs;
+        /// the file name alone when the path is outside the folder.
+        /// </summary>
+        public static string RelativeStimulusName(string stimuliDir, string fullPath)
+        {
+            if (string.IsNullOrEmpty(fullPath))
+            {
+                return "";
+            }
+            string root = string.IsNullOrEmpty(stimuliDir) ? "" : Path.GetFullPath(stimuliDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            string full = Path.GetFullPath(fullPath);
+            if (root.Length > 1 && full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            {
+                return full.Substring(root.Length).Replace('\\', '/');
+            }
+            return Path.GetFileName(full);
+        }
+
+        /// <summary>Stimulus files of a plan that do not exist under the stimuli folder (names as in the plan).</summary>
+        public static List<string> MissingStimuli(string stimuliDir, IEnumerable<string> files)
+        {
+            return files.Where(f => !File.Exists(StimulusFullPath(stimuliDir, f))).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>
+        /// Hash of stimulus names (relative to the stimuli folder, with their subfolders) and sizes; contents are not
+        /// read (4K files are large).
+        /// </summary>
         public static string StimulusManifestSha256(string stimuliDir, IEnumerable<string> files, out int missing)
         {
             missing = 0;
             var sb = new StringBuilder();
             foreach (string f in files.OrderBy(x => x, StringComparer.Ordinal))
             {
-                string p = Path.Combine(stimuliDir, f);
+                string p = StimulusFullPath(stimuliDir, f);
                 long size = -1;
                 if (File.Exists(p))
                 {

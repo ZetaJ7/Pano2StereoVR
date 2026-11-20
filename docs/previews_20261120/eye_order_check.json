@@ -1,0 +1,485 @@
+{
+ "replica ODS reference apartment_0 f0": {
+  "left": "/mnt/nvme1/Pano2stereo/Data/StdTest/replica_gen/apartment_0_seed_300/rgb_left/00000.png",
+  "right": "/mnt/nvme1/Pano2stereo/Data/StdTest/replica_gen/apartment_0_seed_300/rgb_right/00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 10.91,
+    "response": 0.986
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 11.32,
+    "response": 0.71
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 15.09,
+    "response": 0.935
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 14.75,
+    "response": 0.682
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 7.06,
+    "response": 0.972
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 7.32,
+    "response": 0.955
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 7.41,
+    "response": 0.88
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 3.95,
+    "response": 0.72
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 3.14,
+    "response": 0.897
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 4.57,
+    "response": 0.995
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 4.75,
+    "response": 0.852
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 5.12,
+    "response": 0.178
+   }
+  ],
+  "median_shift": 7.1899999999999995,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ },
+ "ours PA 4K apartment_0 f0": {
+  "left": "/mnt/nvme1/E5_stimuli_work/ours_pa/apartment_0_seed_300/stereo/left_repaired_00000.png",
+  "right": "/mnt/nvme1/E5_stimuli_work/ours_pa/apartment_0_seed_300/stereo/right_repaired_00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 11.08,
+    "response": 0.953
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 11.83,
+    "response": 0.717
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 15.75,
+    "response": 0.975
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 14.94,
+    "response": 0.731
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 7.7,
+    "response": 1.004
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 7.88,
+    "response": 0.945
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 6.73,
+    "response": 0.96
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 3.28,
+    "response": 0.735
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 3.14,
+    "response": 0.976
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 4.04,
+    "response": 0.97
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 4.52,
+    "response": 0.91
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 3.03,
+    "response": 0.744
+   }
+  ],
+  "median_shift": 7.215,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ },
+ "deepsynthesis apartment_0 f0": {
+  "left": "/mnt/disk3/Pano2stereo_archive/output/R1_batchB_20261113/B1_baselines/deepsythesis_seqcal_ray/runs/full_apartment_0_seed_300/sequences/replica_gen__apartment_0_seed_300/stereo/left_00000.png",
+  "right": "/mnt/disk3/Pano2stereo_archive/output/R1_batchB_20261113/B1_baselines/deepsythesis_seqcal_ray/runs/full_apartment_0_seed_300/sequences/replica_gen__apartment_0_seed_300/stereo/right_00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 9.81,
+    "response": 0.881
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 9.8,
+    "response": 0.887
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 12.73,
+    "response": 0.761
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 13.59,
+    "response": 0.607
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 7.3,
+    "response": 0.961
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 7.78,
+    "response": 0.998
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 6.42,
+    "response": 0.86
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 3.55,
+    "response": 0.875
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 3.45,
+    "response": 0.922
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 4.41,
+    "response": 1.055
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 4.64,
+    "response": 1.056
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 3.66,
+    "response": 0.632
+   }
+  ],
+  "median_shift": 6.859999999999999,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ },
+ "motionparallax apartment_0 f0": {
+  "left": "/mnt/nvme1/Pano2stereo/output/R1_followup_20261116/MP_layered_ods/runs_final/rep_apartment_0_s300_da2/stereo/left_00000.png",
+  "right": "/mnt/nvme1/Pano2stereo/output/R1_followup_20261116/MP_layered_ods/runs_final/rep_apartment_0_s300_da2/stereo/right_00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 10.94,
+    "response": 0.962
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 11.34,
+    "response": 0.699
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 15.08,
+    "response": 0.93
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 14.61,
+    "response": 0.69
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 7.28,
+    "response": 0.98
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 7.31,
+    "response": 0.96
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 6.61,
+    "response": 1.018
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 4.07,
+    "response": 0.833
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 3.73,
+    "response": 0.935
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 4.16,
+    "response": 0.983
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 4.33,
+    "response": 0.966
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 4.13,
+    "response": 0.841
+   }
+  ],
+  "median_shift": 6.945,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ },
+ "ours PA HELVIPAD REC12IN C f0": {
+  "left": "/mnt/nvme1/E5_stimuli_work/ours_pa_real/hel_REC12IN_s250/stereo/left_repaired_00000.png",
+  "right": "/mnt/nvme1/E5_stimuli_work/ours_pa_real/hel_REC12IN_s250/stereo/right_repaired_00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 1.35,
+    "response": 0.816
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 1.23,
+    "response": 0.758
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 2.55,
+    "response": 0.852
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 2.61,
+    "response": 0.899
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 1.53,
+    "response": 0.713
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 1.28,
+    "response": 0.741
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 1.51,
+    "response": 0.712
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 1.22,
+    "response": 0.883
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 1.31,
+    "response": 0.842
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 1.96,
+    "response": 0.634
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 1.44,
+    "response": 0.756
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 1.36,
+    "response": 0.829
+   }
+  ],
+  "median_shift": 1.4,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ },
+ "deepsynthesis HELVIPAD REC12IN C gt256 f0": {
+  "left": "/mnt/disk4/Pano2stereo_r1/E5_stimuli/ds_runs/runs/e5C_hel_REC12IN_s250_gt256/sequences/helvipad__val__e5C_hel_REC12IN_s250/stereo/left_00000.png",
+  "right": "/mnt/disk4/Pano2stereo_r1/E5_stimuli/ds_runs/runs/e5C_hel_REC12IN_s250_gt256/sequences/helvipad__val__e5C_hel_REC12IN_s250/stereo/right_00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 0.93,
+    "response": 0.732
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 1.25,
+    "response": 0.735
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 1.36,
+    "response": 0.877
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 1.11,
+    "response": 0.642
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 1.08,
+    "response": 0.843
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 1.17,
+    "response": 0.732
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 1.16,
+    "response": 0.781
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 1.0,
+    "response": 0.738
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 1.23,
+    "response": 0.765
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 1.08,
+    "response": 0.763
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 0.86,
+    "response": 0.809
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 1.22,
+    "response": 0.778
+   }
+  ],
+  "median_shift": 1.135,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ },
+ "deepsynthesis PAIR360 1stDorm C f0": {
+  "left": "/mnt/disk4/Pano2stereo_r1/E5_stimuli/ds_runs/runs/e5C_p360_1stDorm_s120/sequences/pair360__e5C_p360_1stDorm_s120/stereo/left_00000.png",
+  "right": "/mnt/disk4/Pano2stereo_r1/E5_stimuli/ds_runs/runs/e5C_p360_1stDorm_s120/sequences/pair360__e5C_p360_1stDorm_s120/stereo/right_00000.png",
+  "sectors": [
+   {
+    "lon_deg": -165,
+    "shift_px_at_1092": 0.82,
+    "response": 1.018
+   },
+   {
+    "lon_deg": -135,
+    "shift_px_at_1092": 1.02,
+    "response": 1.02
+   },
+   {
+    "lon_deg": -105,
+    "shift_px_at_1092": 0.68,
+    "response": 1.044
+   },
+   {
+    "lon_deg": -75,
+    "shift_px_at_1092": 0.89,
+    "response": 1.023
+   },
+   {
+    "lon_deg": -45,
+    "shift_px_at_1092": 0.67,
+    "response": 0.954
+   },
+   {
+    "lon_deg": -15,
+    "shift_px_at_1092": 0.97,
+    "response": 1.09
+   },
+   {
+    "lon_deg": 15,
+    "shift_px_at_1092": 0.8,
+    "response": 1.035
+   },
+   {
+    "lon_deg": 45,
+    "shift_px_at_1092": 0.88,
+    "response": 1.033
+   },
+   {
+    "lon_deg": 75,
+    "shift_px_at_1092": 0.7,
+    "response": 1.027
+   },
+   {
+    "lon_deg": 105,
+    "shift_px_at_1092": 0.87,
+    "response": 1.015
+   },
+   {
+    "lon_deg": 135,
+    "shift_px_at_1092": 1.06,
+    "response": 1.035
+   },
+   {
+    "lon_deg": 165,
+    "shift_px_at_1092": 1.06,
+    "response": 0.891
+   }
+  ],
+  "median_shift": 0.875,
+  "positive_sectors": 12,
+  "negative_sectors": 0
+ }
+}

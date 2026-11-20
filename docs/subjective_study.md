@@ -19,8 +19,8 @@
 ## 2. 运行
 
 ### 2.1 准备
-1. 生成试次清单：`python StudyTools/make_trial_plans.py --config StudyTools/study_config.example.json --participants P01-P30 --out StudyTools/plans`
-2. 刺激放到 `Stimuli/`，文件名 `<clip_id>__<condition>.mp4`，上下排列（上半左眼）；第二部分 PAw 按修正半径分 5 个变体 `<clip_id>__paw_t<θ>.mp4`（θ = 10、15、20、25、30，如 `near_A__paw_t20.mp4`），PA 仍为 `<clip_id>__pa.mp4`。桌面检查可先用 `python tools/make_test_clips.py --plans StudyTools/plans --out Stimuli --ffmpeg D:/WorkSpace/ffmpeg/bin/ffmpeg.exe` 生成测试片段。
+1. 生成试次清单：正式 `python StudyTools/make_trial_plans.py --config StudyTools/study_config.example.json --participants P01-P40 --out StudyTools/plans`；预实验 `--participants T01-T05 --out StudyTools/plans_pilot`（不占正式编号；预实验时把 `plans_dir` 指到 `StudyTools/plans_pilot`）。40 为 4 的倍数，第一部分每个条件在组内每个位置的次数在 P01–P40 上完全相等（各 90 次）。
+2. 刺激放到 `Stimuli/` 下按类型分的子文件夹（`part1/practice`、`part1/dummy`、`part1/virtual_indoor`、`part1/real_indoor`、`part1/real_outdoor`、`part2/practice`、`part2/near`，用户 11-20），文件名 `<clip_id>__<condition>.mp4`，上下排列（上半左眼）；第二部分 PAw 按修正半径分 5 个变体 `<clip_id>__paw_t<θ>.mp4`（θ = 10、15、20、25、30，如 `near_A__paw_t20.mp4`），PA 仍为 `<clip_id>__pa.mp4`。桌面检查可先用 `python tools/make_test_clips.py --plans StudyTools/plans --out Stimuli（按同一子文件夹写入） --ffmpeg D:/WorkSpace/ffmpeg/bin/ffmpeg.exe` 生成测试片段。
 3. 会话模式：默认 `formal`，签到时清单中任何刺激缺失（PAw 的 5 个变体都要检查）都不能开始（签到页显示一行错误，缺失文件清单写入 Unity 日志与 `events.csv`）。走查或自动驾驶用 `qa`：缺失片段以占位图案播放，`session.json` 标记 `mode: qa`；状态栏另有“跳到下一组”（PgDn）与“跳到下一部分”（Shift+PgDn），跳过的试次标记 `skipped = 1`，分析不使用。第一部分的 DeepSynthesis、MotionParallax 刺激尚未生成，目前只能在 QA 模式下走查（或用 `tools/make_test_clips.py` 按新清单补生成测试片段）。
 4. 路径与模式默认值（编辑器内）：清单 `StudyTools/plans`，刺激 `Stimuli`，数据 `StudyData`，备份 `StudyData_backup`，模式 `formal`。可在工程根目录（打包后为 exe 所在目录）放 `study_settings.json` 修改：
    ```json

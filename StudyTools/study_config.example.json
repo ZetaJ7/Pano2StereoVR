@@ -3,7 +3,19 @@
   "config_version": "v3-draft-2026-11-19",
   "note": "Clip IDs are placeholders until the stimulus list is confirmed. Stimulus files are top-bottom stereo ERP (left eye on top). 4K clips are 5768x5768 (two 5768x2884 views); HELVIPAD clips keep their native 1932x966 per view.",
   "stimuli_dir": "Stimuli",
-  "file_pattern": "{clip_id}__{condition}.mp4",
+  "file_pattern": "{folder}/{clip_id}__{condition}.mp4",
+  "stimulus_folders": {
+    "part1": {
+      "training": "part1/practice",
+      "dummy": "part1/dummy",
+      "main": "part1/{cell}"
+    },
+    "part2": {
+      "training": "part2/practice",
+      "main": "part2/near"
+    },
+    "note": "刺激按类型放在 stimuli_dir 下的子文件夹（用户 11-19/11-20，见 docs/stimulus_plan_20261119.md 第 9 节）：第一部分练习 part1/practice、dummy part1/dummy、正式按片段的 cell（part1/virtual_indoor、part1/real_indoor、part1/real_outdoor）；第二部分练习 part2/practice、正式 part2/near。清单中的文件名带子文件夹（正斜杠），程序在 stimuli_dir 下解析"
+  },
   "flow": [
     "checkin",
     "ssq:S_pre",
@@ -212,8 +224,8 @@
       "paw"
     ],
     "file_patterns": {
-      "paw": "{clip_id}__paw_t{paw_theta}.mp4",
-      "note": "第二部分 PAw 文件按修正半径分变体（用户 11-20，方案 A）：{paw_theta} 在清单中保留为占位符，程序在自然注视范围测量后按被试选定的 θ 替换（如 near_A__paw_t20.mp4）；PA 文件名不变。签到时检查全部变体是否存在"
+      "paw": "{folder}/{clip_id}__paw_t{paw_theta}.mp4",
+      "note": "第二部分 PAw 文件按修正半径分变体（用户 11-20，方案 A）：{paw_theta} 在清单中保留为占位符，程序在自然注视范围测量后按被试选定的 θ 替换（如 part2/near/near_A__paw_t20.mp4）；PA 文件名不变。签到时检查全部变体是否存在"
     },
     "same_pairs_per_clip": 1,
     "clips": [

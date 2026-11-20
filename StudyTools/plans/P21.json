@@ -2,10 +2,10 @@
   "plan_format_version": 5,
   "study_id": "Pano2Stereo-E5",
   "config_version": "v3-draft-2026-11-19",
-  "config_sha256": "c06b1339f1215001be8ef9d51f0473b8dd08ce89d8d6451201c4c65e54ff6e79",
+  "config_sha256": "9e787a7df3fa678ae227abffbaf280360c11577bce18e805fd0a1a70f894fac5",
   "participant_id": "P21",
   "seed": 261964627025088,
-  "generated_utc": "2026-11-20T07:11:40+00:00",
+  "generated_utc": "2026-11-20T08:11:22+00:00",
   "timing": {
     "clip_s": 10.0,
     "gap_between_ab_s": 1.5,
@@ -280,7 +280,7 @@
           "group_size": 0,
           "position_in_group": 0,
           "index": 0,
-          "file": "train_indoor__ours.mp4"
+          "file": "part1/practice/train_indoor__ours.mp4"
         },
         {
           "block": "training",
@@ -290,7 +290,7 @@
           "group_size": 0,
           "position_in_group": 0,
           "index": 1,
-          "file": "train_outdoor__mono.mp4"
+          "file": "part1/practice/train_outdoor__mono.mp4"
         },
         {
           "block": "dummy",
@@ -303,7 +303,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 2,
-          "file": "dummy_indoor__ours.mp4"
+          "file": "part1/dummy/dummy_indoor__ours.mp4"
         },
         {
           "block": "dummy",
@@ -316,7 +316,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 3,
-          "file": "dummy_indoor__deepsynthesis.mp4"
+          "file": "part1/dummy/dummy_indoor__deepsynthesis.mp4"
         },
         {
           "block": "dummy",
@@ -329,7 +329,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 4,
-          "file": "dummy_indoor__motionparallax.mp4"
+          "file": "part1/dummy/dummy_indoor__motionparallax.mp4"
         },
         {
           "block": "dummy",
@@ -342,7 +342,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 5,
-          "file": "dummy_indoor__mono.mp4"
+          "file": "part1/dummy/dummy_indoor__mono.mp4"
         },
         {
           "block": "main",
@@ -355,7 +355,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 6,
-          "file": "rin_B__ours.mp4"
+          "file": "part1/real_indoor/rin_B__ours.mp4"
         },
         {
           "block": "main",
@@ -368,7 +368,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 7,
-          "file": "rin_B__deepsynthesis.mp4"
+          "file": "part1/real_indoor/rin_B__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -381,7 +381,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 8,
-          "file": "rin_B__motionparallax.mp4"
+          "file": "part1/real_indoor/rin_B__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -394,7 +394,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 9,
-          "file": "rin_B__mono.mp4"
+          "file": "part1/real_indoor/rin_B__mono.mp4"
         },
         {
           "block": "main",
@@ -407,7 +407,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 10,
-          "file": "rout_B__ours.mp4"
+          "file": "part1/real_outdoor/rout_B__ours.mp4"
         },
         {
           "block": "main",
@@ -420,7 +420,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 11,
-          "file": "rout_B__deepsynthesis.mp4"
+          "file": "part1/real_outdoor/rout_B__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -433,7 +433,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 12,
-          "file": "rout_B__motionparallax.mp4"
+          "file": "part1/real_outdoor/rout_B__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -446,7 +446,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 13,
-          "file": "rout_B__mono.mp4"
+          "file": "part1/real_outdoor/rout_B__mono.mp4"
         },
         {
           "block": "main",
@@ -459,7 +459,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 14,
-          "file": "rin_A__mono.mp4"
+          "file": "part1/real_indoor/rin_A__mono.mp4"
         },
         {
           "block": "main",
@@ -472,7 +472,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 15,
-          "file": "rin_A__ours.mp4"
+          "file": "part1/real_indoor/rin_A__ours.mp4"
         },
         {
           "block": "main",
@@ -485,7 +485,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 16,
-          "file": "rin_A__deepsynthesis.mp4"
+          "file": "part1/real_indoor/rin_A__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -498,7 +498,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 17,
-          "file": "rin_A__motionparallax.mp4"
+          "file": "part1/real_indoor/rin_A__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -511,7 +511,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 18,
-          "file": "vin_B__motionparallax.mp4"
+          "file": "part1/virtual_indoor/vin_B__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -524,7 +524,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 19,
-          "file": "vin_B__mono.mp4"
+          "file": "part1/virtual_indoor/vin_B__mono.mp4"
         },
         {
           "block": "main",
@@ -537,7 +537,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 20,
-          "file": "vin_B__ours.mp4"
+          "file": "part1/virtual_indoor/vin_B__ours.mp4"
         },
         {
           "block": "main",
@@ -550,7 +550,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 21,
-          "file": "vin_B__deepsynthesis.mp4"
+          "file": "part1/virtual_indoor/vin_B__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -563,7 +563,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 22,
-          "file": "vin_C__mono.mp4"
+          "file": "part1/virtual_indoor/vin_C__mono.mp4"
         },
         {
           "block": "main",
@@ -576,7 +576,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 23,
-          "file": "vin_C__ours.mp4"
+          "file": "part1/virtual_indoor/vin_C__ours.mp4"
         },
         {
           "block": "main",
@@ -589,7 +589,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 24,
-          "file": "vin_C__deepsynthesis.mp4"
+          "file": "part1/virtual_indoor/vin_C__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -602,7 +602,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 25,
-          "file": "vin_C__motionparallax.mp4"
+          "file": "part1/virtual_indoor/vin_C__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -615,7 +615,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 26,
-          "file": "vin_A__deepsynthesis.mp4"
+          "file": "part1/virtual_indoor/vin_A__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -628,7 +628,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 27,
-          "file": "vin_A__motionparallax.mp4"
+          "file": "part1/virtual_indoor/vin_A__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -641,7 +641,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 28,
-          "file": "vin_A__mono.mp4"
+          "file": "part1/virtual_indoor/vin_A__mono.mp4"
         },
         {
           "block": "main",
@@ -654,7 +654,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 29,
-          "file": "vin_A__ours.mp4"
+          "file": "part1/virtual_indoor/vin_A__ours.mp4"
         },
         {
           "block": "main",
@@ -667,7 +667,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 30,
-          "file": "rin_C__ours.mp4"
+          "file": "part1/real_indoor/rin_C__ours.mp4"
         },
         {
           "block": "main",
@@ -680,7 +680,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 31,
-          "file": "rin_C__deepsynthesis.mp4"
+          "file": "part1/real_indoor/rin_C__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -693,7 +693,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 32,
-          "file": "rin_C__motionparallax.mp4"
+          "file": "part1/real_indoor/rin_C__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -706,7 +706,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 33,
-          "file": "rin_C__mono.mp4"
+          "file": "part1/real_indoor/rin_C__mono.mp4"
         },
         {
           "block": "main",
@@ -719,7 +719,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 34,
-          "file": "rout_C__motionparallax.mp4"
+          "file": "part1/real_outdoor/rout_C__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -732,7 +732,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 35,
-          "file": "rout_C__mono.mp4"
+          "file": "part1/real_outdoor/rout_C__mono.mp4"
         },
         {
           "block": "main",
@@ -745,7 +745,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 36,
-          "file": "rout_C__ours.mp4"
+          "file": "part1/real_outdoor/rout_C__ours.mp4"
         },
         {
           "block": "main",
@@ -758,7 +758,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 37,
-          "file": "rout_C__deepsynthesis.mp4"
+          "file": "part1/real_outdoor/rout_C__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -771,7 +771,7 @@
           "group_size": 4,
           "position_in_group": 0,
           "index": 38,
-          "file": "rout_A__deepsynthesis.mp4"
+          "file": "part1/real_outdoor/rout_A__deepsynthesis.mp4"
         },
         {
           "block": "main",
@@ -784,7 +784,7 @@
           "group_size": 4,
           "position_in_group": 1,
           "index": 39,
-          "file": "rout_A__motionparallax.mp4"
+          "file": "part1/real_outdoor/rout_A__motionparallax.mp4"
         },
         {
           "block": "main",
@@ -797,7 +797,7 @@
           "group_size": 4,
           "position_in_group": 2,
           "index": 40,
-          "file": "rout_A__mono.mp4"
+          "file": "part1/real_outdoor/rout_A__mono.mp4"
         },
         {
           "block": "main",
@@ -810,7 +810,7 @@
           "group_size": 4,
           "position_in_group": 3,
           "index": 41,
-          "file": "rout_A__ours.mp4"
+          "file": "part1/real_outdoor/rout_A__ours.mp4"
         }
       ]
     },
@@ -832,8 +832,8 @@
           "reference_pitch_deg": 0.0,
           "index": 0,
           "pair_type": "real",
-          "file_a": "train_near__pa.mp4",
-          "file_b": "train_near__paw_t{paw_theta}.mp4"
+          "file_a": "part2/practice/train_near__pa.mp4",
+          "file_b": "part2/practice/train_near__paw_t{paw_theta}.mp4"
         },
         {
           "block": "training",
@@ -844,8 +844,8 @@
           "reference_pitch_deg": 0.0,
           "index": 1,
           "pair_type": "same",
-          "file_a": "train_near__paw_t{paw_theta}.mp4",
-          "file_b": "train_near__paw_t{paw_theta}.mp4"
+          "file_a": "part2/practice/train_near__paw_t{paw_theta}.mp4",
+          "file_b": "part2/practice/train_near__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -858,8 +858,8 @@
           "scene": "indoor",
           "index": 2,
           "pair_type": "same",
-          "file_a": "near_E__paw_t{paw_theta}.mp4",
-          "file_b": "near_E__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_E__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_E__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -872,8 +872,8 @@
           "scene": "indoor",
           "index": 3,
           "pair_type": "same",
-          "file_a": "near_B__pa.mp4",
-          "file_b": "near_B__pa.mp4"
+          "file_a": "part2/near/near_B__pa.mp4",
+          "file_b": "part2/near/near_B__pa.mp4"
         },
         {
           "block": "main",
@@ -886,8 +886,8 @@
           "scene": "indoor",
           "index": 4,
           "pair_type": "real",
-          "file_a": "near_A__paw_t{paw_theta}.mp4",
-          "file_b": "near_A__pa.mp4"
+          "file_a": "part2/near/near_A__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_A__pa.mp4"
         },
         {
           "block": "main",
@@ -900,8 +900,8 @@
           "scene": "indoor",
           "index": 5,
           "pair_type": "real",
-          "file_a": "near_E__paw_t{paw_theta}.mp4",
-          "file_b": "near_E__pa.mp4"
+          "file_a": "part2/near/near_E__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_E__pa.mp4"
         },
         {
           "block": "main",
@@ -914,8 +914,8 @@
           "scene": "indoor",
           "index": 6,
           "pair_type": "real",
-          "file_a": "near_F__paw_t{paw_theta}.mp4",
-          "file_b": "near_F__pa.mp4"
+          "file_a": "part2/near/near_F__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_F__pa.mp4"
         },
         {
           "block": "main",
@@ -928,8 +928,8 @@
           "scene": "indoor",
           "index": 7,
           "pair_type": "real",
-          "file_a": "near_D__pa.mp4",
-          "file_b": "near_D__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_D__pa.mp4",
+          "file_b": "part2/near/near_D__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -942,8 +942,8 @@
           "scene": "indoor",
           "index": 8,
           "pair_type": "real",
-          "file_a": "near_B__paw_t{paw_theta}.mp4",
-          "file_b": "near_B__pa.mp4"
+          "file_a": "part2/near/near_B__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_B__pa.mp4"
         },
         {
           "block": "main",
@@ -956,8 +956,8 @@
           "scene": "indoor",
           "index": 9,
           "pair_type": "real",
-          "file_a": "near_A__pa.mp4",
-          "file_b": "near_A__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_A__pa.mp4",
+          "file_b": "part2/near/near_A__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -970,8 +970,8 @@
           "scene": "indoor",
           "index": 10,
           "pair_type": "same",
-          "file_a": "near_D__pa.mp4",
-          "file_b": "near_D__pa.mp4"
+          "file_a": "part2/near/near_D__pa.mp4",
+          "file_b": "part2/near/near_D__pa.mp4"
         },
         {
           "block": "main",
@@ -984,8 +984,8 @@
           "scene": "indoor",
           "index": 11,
           "pair_type": "real",
-          "file_a": "near_B__pa.mp4",
-          "file_b": "near_B__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_B__pa.mp4",
+          "file_b": "part2/near/near_B__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -998,8 +998,8 @@
           "scene": "indoor",
           "index": 12,
           "pair_type": "real",
-          "file_a": "near_C__paw_t{paw_theta}.mp4",
-          "file_b": "near_C__pa.mp4"
+          "file_a": "part2/near/near_C__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_C__pa.mp4"
         },
         {
           "block": "main",
@@ -1012,8 +1012,8 @@
           "scene": "indoor",
           "index": 13,
           "pair_type": "same",
-          "file_a": "near_F__pa.mp4",
-          "file_b": "near_F__pa.mp4"
+          "file_a": "part2/near/near_F__pa.mp4",
+          "file_b": "part2/near/near_F__pa.mp4"
         },
         {
           "block": "main",
@@ -1026,8 +1026,8 @@
           "scene": "indoor",
           "index": 14,
           "pair_type": "real",
-          "file_a": "near_E__pa.mp4",
-          "file_b": "near_E__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_E__pa.mp4",
+          "file_b": "part2/near/near_E__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -1040,8 +1040,8 @@
           "scene": "indoor",
           "index": 15,
           "pair_type": "same",
-          "file_a": "near_C__paw_t{paw_theta}.mp4",
-          "file_b": "near_C__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_C__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_C__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -1054,8 +1054,8 @@
           "scene": "indoor",
           "index": 16,
           "pair_type": "same",
-          "file_a": "near_A__paw_t{paw_theta}.mp4",
-          "file_b": "near_A__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_A__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_A__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -1068,8 +1068,8 @@
           "scene": "indoor",
           "index": 17,
           "pair_type": "real",
-          "file_a": "near_F__pa.mp4",
-          "file_b": "near_F__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_F__pa.mp4",
+          "file_b": "part2/near/near_F__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -1082,8 +1082,8 @@
           "scene": "indoor",
           "index": 18,
           "pair_type": "real",
-          "file_a": "near_C__pa.mp4",
-          "file_b": "near_C__paw_t{paw_theta}.mp4"
+          "file_a": "part2/near/near_C__pa.mp4",
+          "file_b": "part2/near/near_C__paw_t{paw_theta}.mp4"
         },
         {
           "block": "main",
@@ -1096,8 +1096,8 @@
           "scene": "indoor",
           "index": 19,
           "pair_type": "real",
-          "file_a": "near_D__paw_t{paw_theta}.mp4",
-          "file_b": "near_D__pa.mp4"
+          "file_a": "part2/near/near_D__paw_t{paw_theta}.mp4",
+          "file_b": "part2/near/near_D__pa.mp4"
         }
       ]
     }

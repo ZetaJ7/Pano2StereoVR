@@ -11,7 +11,10 @@ namespace Pano2StereoVR.Study
     /// <summary>Playback statistics of one segment (written to playback.csv).</summary>
     public sealed class PlaybackStats
     {
+        /// <summary>File name of the clip; the controller logs it relative to the stimuli folder (see FullPath).</summary>
         public string File = "";
+        /// <summary>Full path of the clip as prepared.</summary>
+        public string FullPath = "";
         public long FramesExpected;
         public int FramesShown;
         public int FramesDropped;
@@ -231,6 +234,7 @@ namespace Pano2StereoVR.Study
         public IEnumerator Play(Slot s, PlayRequest req, PlaybackStats stats)
         {
             stats.File = Path.GetFileName(s.Path);
+            stats.FullPath = s.Path;
             bool placeholder = s.Failed || !s.Prepared;
             double length = !placeholder && s.Player.length > 0 ? s.Player.length : req.NominalSeconds;
             length = Math.Max(0.1, length);

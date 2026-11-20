@@ -170,6 +170,39 @@ namespace Pano2StereoVR.Study.Tests
         }
 
         [Test]
+        public void StimuliInSubfoldersResolveUnderTheStimuliFolder()
+        {
+            // user 11-20: plan names carry subfolders with forward slashes
+            string root = Path.Combine(Path.GetTempPath(), "p2s_stimuli_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string sub = Path.Combine(root, "part1", "practice");
+                Directory.CreateDirectory(sub);
+                File.WriteAllText(Path.Combine(sub, "train_indoor__ours.mp4"), "x");
+                string full = StudyDataLogger.StimulusFullPath(root, "part1/practice/train_indoor__ours.mp4");
+                Assert.AreEqual(Path.GetFullPath(Path.Combine(sub, "train_indoor__ours.mp4")), full);
+                Assert.IsTrue(File.Exists(full));
+                Assert.AreEqual("part1/practice/train_indoor__ours.mp4", StudyDataLogger.RelativeStimulusName(root, full));
+                Assert.AreEqual("x.mp4", StudyDataLogger.RelativeStimulusName(root, Path.Combine(Path.GetTempPath(), "x.mp4")), "outside the folder");
+                Assert.AreEqual("", StudyDataLogger.StimulusFullPath(root, ""));
+                CollectionAssert.AreEqual(new[] { "part2/near/near_A__pa.mp4" },
+                    StudyDataLogger.MissingStimuli(root, new[] { "part1/practice/train_indoor__ours.mp4", "part2/near/near_A__pa.mp4" }));
+                string h1 = StudyDataLogger.StimulusManifestSha256(root, new[] { "part1/practice/train_indoor__ours.mp4" }, out int missing);
+                Assert.AreEqual(0, missing);
+                File.WriteAllText(Path.Combine(sub, "train_indoor__ours.mp4"), "xy");
+                Assert.AreNotEqual(h1, StudyDataLogger.StimulusManifestSha256(root, new[] { "part1/practice/train_indoor__ours.mp4" }, out missing),
+                    "the manifest follows the file in its subfolder");
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, true);
+                }
+            }
+        }
+
+        [Test]
         public void ExistingParticipantFolderIsNeverReused()
         {
             string root = Path.Combine(Path.GetTempPath(), "p2s_study_root_" + Guid.NewGuid().ToString("N"));

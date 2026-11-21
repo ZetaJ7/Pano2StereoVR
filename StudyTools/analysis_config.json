@@ -1,0 +1,20 @@
+{
+  "screening_primary": "none",
+  "correlation_mct": 0.7,
+  "alternative": "two-sided",
+  "head_deviation_threshold_deg": null,
+  "dropped_frame_fraction_threshold": 0.05,
+  "preference_no_difference_as_zero": true,
+  "ssq_primary_contrast": ["S_pre", "S_post"],
+  "stereo_pass_rule": null,
+  "session_modes": ["formal"],
+  "exclude_self_reported_vision": true,
+  "primary_family": ["P1", "P2", "P3", "P4a", "P4b", "P5"],
+  "conditions_part1": ["mono", "ours", "deepsynthesis", "motionparallax"],
+  "part1_primary_pair": ["mono", "ours"],
+  "part1_extra_pairs": [["deepsynthesis", "ours"], ["motionparallax", "ours"]],
+  "ssq_descriptive_contrasts": [["S_pre", "S_mid1"], ["S_mid2", "S_post"], ["S_pre", "S_mid2"]],
+  "conditions_part2": ["pa", "paw"],
+  "bootstrap_iterations": 10000,
+  "bootstrap_seed": 20261115
+}

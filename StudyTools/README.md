@@ -129,3 +129,30 @@ v4 相对 v3：`stereotest.csv`、`part1.csv`、`part2.csv` 增加 `skipped`；`
 - 自然注视范围：逐被试 a、θ、来源、删失数与提前结束数（`session.json` 记录值，并按 `eyerange_trace.csv` 逐帧数据与同一阈值、同一规则复算核对）；各方向 `head_onset_ecc_deg` 中位数（逐被试，以及各方向在被试间的分布：N、最小、四分位、中位数、最大），只报数。第二部分按 θ 分组的描述性结果（人数、命中率、虚报率、d′ 与偏好均值），不做检验，不新增剔除规则。
 - 观看时长：第二部分每段观看时长、循环次数、每段最大头部偏离，第一部分每段观看时长，只报告分布。
 - 主要比较组 Holm 校正；头部偏离角与丢帧的分布（阈值未设定时只报告）。
+
+## 分析配置 `analysis_config.json`（草稿，2026-11-21，待用户过目）
+
+依据 `docs/E5_AnalysisPlan_20261121.md` 第 1–3 节。程序用 `json.loads` 读配置，JSON 不能写注释；配置只用 `analyze_study.py` 中 `DEFAULT_ANALYSIS` 已有的键，说明写在这里。当前为草稿：用户过目、预实验后填入 `stereo_pass_rule` 并再次提交（早于第一位正式被试）之后才算冻结。
+
+```powershell
+python analyze_study.py --data StudyData --config study_config.example.json --analysis analysis_config.json --out report
+```
+
+| 键 | 取值 | 状态 |
+| --- | --- | --- |
+| `part1_primary_pair` | `["mono", "ours"]`（P1–P3 为 Ours − Mono） | 用户已定（11-21 晚） |
+| `alternative` | `"two-sided"` | 用户已定 |
+| `primary_family` | `P1, P2, P3, P4a, P4b, P5`，Holm 校正 | 用户已定 |
+| `screening_primary` | `"none"`（主分析不筛除；峰度法与相关法口径照常给数，作敏感性分析） | 用户已定 |
+| `stereo_pass_rule` | `null` | **预实验后填**：原则为只排除最大视差档也不能通过的被试，档位与通过次数在预实验后写入 |
+| `session_modes` | `["formal"]` | 草稿，Claude 的建议 |
+| `exclude_self_reported_vision` | `true` | 草稿，Claude 的建议 |
+| `dropped_frame_fraction_threshold` | `0.05` | 草稿，Claude 的建议 |
+| `head_deviation_threshold_deg` | `null`（不另设阈值，只报分布；第二部分线上已对头部偏离中断重播） | 草稿，Claude 的建议 |
+| `preference_no_difference_as_zero` | `true`（P4b） | 草稿，Claude 的建议 |
+| `ssq_primary_contrast` | `["S_pre", "S_post"]`（P5） | 草稿，Claude 的建议 |
+| `correlation_mct` | `0.7` | 草稿，Claude 的建议 |
+| `bootstrap_iterations`、`bootstrap_seed` | `10000`、`20261115` | 草稿，Claude 的建议 |
+| `part1_extra_pairs` | Ours 对 DeepSynthesis、Ours 对 MotionParallax（探索性，不校正） | 草稿，Claude 的建议 |
+| `ssq_descriptive_contrasts` | `S_pre`→`S_mid1`、`S_mid2`→`S_post`、`S_pre`→`S_mid2`（只报数） | 草稿，Claude 的建议（方案第 3 节） |
+| `conditions_part1`、`conditions_part2` | 与程序默认相同 | 方案未单列；显式写出，便于冻结 |

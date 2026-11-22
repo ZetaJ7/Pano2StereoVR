@@ -1,0 +1,34 @@
+{
+ "crop_xywh": [
+  1720,
+  1460,
+  480,
+  320
+ ],
+ "frames30": [
+  100,
+  109
+ ],
+ "lanczos": {
+  "psnr_full": 35.69,
+  "psnr_crop": 26.82,
+  "tdiff_err": 1.749,
+  "tdiff_err_crop": 8.137,
+  "tdiff_ratio": 0.781
+ },
+ "x4plus": {
+  "psnr_full": 35.0,
+  "psnr_crop": 26.87,
+  "tdiff_err": 2.05,
+  "tdiff_err_crop": 7.873,
+  "tdiff_ratio": 0.904
+ },
+ "animev3": {
+  "psnr_full": 33.75,
+  "psnr_crop": 26.35,
+  "tdiff_err": 1.74,
+  "tdiff_err_crop": 7.789,
+  "tdiff_ratio": 0.783
+ },
+ "render4k_mean_abs_tdiff": 2.436
+}

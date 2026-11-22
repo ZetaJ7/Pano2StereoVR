@@ -30,6 +30,8 @@ Assets/AssetStoreTools*
 /Stimuli/
 /StudyData/
 /StudyData_backup/
+/Stimuli_blender/
+/Stimuli_ds_v1v2/
 
 # local per-machine study settings (qa mode for desktop checks)
 study_settings.json

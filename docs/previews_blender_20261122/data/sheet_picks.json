@@ -1,0 +1,708 @@
+[
+ {
+  "scene": "apartment",
+  "seq": "traverse",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 12.499999999999998,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.016)\nD_med 4.20 D_min 1.80 D<1 0.00 fwd<1max 0.000 all<1max 0.014 | speed 0.39/0.50 m/s yawrate(removed) 5.1 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 4.2048,
+   "D_min": 1.8,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0141,
+   "speed_mean": 0.3943,
+   "speed_max": 0.5011,
+   "motion_dir_cyaw": -12.5
+  }
+ },
+ {
+  "scene": "apartment",
+  "seq": "near_lateral",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": -5.7262196277201735e-16,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.015)\nD_med 5.48 D_min 5.43 D<1 0.00 fwd<1max 0.000 all<1max 0.007 | speed 0.29/0.37 m/s yawrate(removed) 2.4 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 5.4775,
+   "D_min": 5.4305,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0066,
+   "speed_mean": 0.2886,
+   "speed_max": 0.3658,
+   "motion_dir_cyaw": 90.0
+  }
+ },
+ {
+  "scene": "apartment",
+  "seq": "curved_yaw",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 13.191663060617174,
+  "world_az": 65,
+  "ref_cyaw": 50,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az+65 mean 0.087 persist 0.78 run 9.4s objd 1.59 ts0/3/6/9/12s [0.0, 0.043, 0.12, 0.142, 0.092] | mean-best az+60 0.092\nD_med 5.05 D_min 5.00 D<1 0.00 fwd<1max 0.000 all<1max 0.009 | speed 0.11/0.15 m/s yawrate(removed) 8.2 deg/s",
+  "obj": {
+   "az": 65,
+   "mean": 0.08668019622564316,
+   "q25": 0.040726374834775925,
+   "persist": 0.7833333333333333,
+   "run_s": 9.4,
+   "objd": 1.5940721035003662,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.043,
+    0.12,
+    0.142,
+    0.092
+   ]
+  },
+  "wall": {
+   "D_med": 5.047,
+   "D_min": 4.995,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0085,
+   "speed_mean": 0.1093,
+   "speed_max": 0.1543,
+   "motion_dir_cyaw": 78.5243
+  }
+ },
+ {
+  "scene": "bedroom",
+  "seq": "traverse",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 21.920461106817076,
+  "world_az": -5,
+  "ref_cyaw": -25,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az-5 mean 0.025 persist 0.40 run 4.8s objd 1.19 ts0/3/6/9/12s [0.0, 0.0, 0.0, 0.063, 0.063] | mean-best az-5 0.025\nD_med 2.94 D_min 0.89 D<1 0.10 fwd<1max 0.694 all<1max 0.050 | speed 0.36/0.48 m/s yawrate(removed) 7.5 deg/s",
+  "obj": {
+   "az": -5,
+   "mean": 0.025252696126699448,
+   "q25": 0.0,
+   "persist": 0.4,
+   "run_s": 4.800000000000001,
+   "objd": 1.1862945556640625,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.0,
+    0.0,
+    0.063,
+    0.063
+   ]
+  },
+  "wall": {
+   "D_med": 2.9395,
+   "D_min": 0.889,
+   "D_lt1": 0.1,
+   "fwd_lt10_max": 0.6939,
+   "all_lt10_max": 0.0497,
+   "speed_mean": 0.3592,
+   "speed_max": 0.4811,
+   "motion_dir_cyaw": -21.9205
+  }
+ },
+ {
+  "scene": "bedroom",
+  "seq": "near_lateral",
+  "f0": 0,
+  "t0_s": 0.0,
+  "H_deg": -11.92046110681708,
+  "world_az": -80,
+  "ref_cyaw": -70,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az-80 mean 0.069 persist 0.42 run 5.0s objd 1.28 ts0/3/6/9/12s [0.196, 0.166, 0.0, 0.0, 0.0] | mean-best az-75 0.072\nD_med 4.36 D_min 3.85 D<1 0.00 fwd<1max 0.000 all<1max 0.013 | speed 0.34/0.46 m/s yawrate(removed) 7.5 deg/s",
+  "obj": {
+   "az": -80,
+   "mean": 0.06901153177022934,
+   "q25": 0.0,
+   "persist": 0.4166666666666667,
+   "run_s": 5.0,
+   "objd": 1.278365969657898,
+   "ts_0_3_6_9_12": [
+    0.196,
+    0.166,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "wall": {
+   "D_med": 4.3607,
+   "D_min": 3.8465,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0133,
+   "speed_mean": 0.3443,
+   "speed_max": 0.461,
+   "motion_dir_cyaw": 101.9205
+  }
+ },
+ {
+  "scene": "bedroom",
+  "seq": "curved_yaw",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 107.1818399997671,
+  "world_az": 95,
+  "ref_cyaw": -10,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az+95 mean 0.056 persist 0.59 run 7.1s objd 1.68 ts0/3/6/9/12s [0.0, 0.0, 0.098, 0.085, 0.047] | mean-best az+95 0.056\nD_med 2.56 D_min 2.31 D<1 0.00 fwd<1max 0.000 all<1max 0.002 | speed 0.29/0.38 m/s yawrate(removed) 10.5 deg/s",
+  "obj": {
+   "az": 95,
+   "mean": 0.05598555505275726,
+   "q25": 0.0,
+   "persist": 0.5916666666666667,
+   "run_s": 7.1000000000000005,
+   "objd": 1.678027868270874,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.0,
+    0.098,
+    0.085,
+    0.047
+   ]
+  },
+  "wall": {
+   "D_med": 2.5568,
+   "D_min": 2.305,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0017,
+   "speed_mean": 0.2867,
+   "speed_max": 0.3794,
+   "motion_dir_cyaw": -89.6003
+  }
+ },
+ {
+  "scene": "cafe",
+  "seq": "traverse",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 10.000000000000002,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.019)\nD_med 4.28 D_min 1.61 D<1 0.00 fwd<1max 0.000 all<1max 0.043 | speed 0.43/0.55 m/s yawrate(removed) 7.9 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 4.284,
+   "D_min": 1.606,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0435,
+   "speed_mean": 0.4338,
+   "speed_max": 0.5512,
+   "motion_dir_cyaw": -10.0
+  }
+ },
+ {
+  "scene": "cafe",
+  "seq": "near_lateral",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 11.920461106817076,
+  "world_az": 25,
+  "ref_cyaw": 15,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az+25 mean 0.034 persist 0.53 run 6.3s objd 1.77 ts0/3/6/9/12s [0.0, 0.0, 0.045, 0.071, 0.042] | mean-best az+95 0.137\nD_med 3.37 D_min 1.73 D<1 0.00 fwd<1max 0.000 all<1max 0.011 | speed 0.40/0.53 m/s yawrate(removed) 7.5 deg/s",
+  "obj": {
+   "az": 25,
+   "mean": 0.034126706421375275,
+   "q25": 0.0,
+   "persist": 0.525,
+   "run_s": 6.300000000000001,
+   "objd": 1.7685526609420776,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.0,
+    0.045,
+    0.071,
+    0.042
+   ]
+  },
+  "wall": {
+   "D_med": 3.3738,
+   "D_min": 1.726,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.011,
+   "speed_mean": 0.3966,
+   "speed_max": 0.5312,
+   "motion_dir_cyaw": 78.0795
+  }
+ },
+ {
+  "scene": "cafe",
+  "seq": "curved_yaw",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 90.0,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.010)\nD_med 4.96 D_min 3.06 D<1 0.00 fwd<1max 0.000 all<1max 0.062 | speed 0.32/0.46 m/s yawrate(removed) 11.0 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 4.9635,
+   "D_min": 3.0645,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0616,
+   "speed_mean": 0.3209,
+   "speed_max": 0.4608,
+   "motion_dir_cyaw": -1.6482
+  }
+ },
+ {
+  "scene": "gallery",
+  "seq": "traverse",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 15.000000000000009,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.014)\nD_med 4.52 D_min 1.22 D<1 0.00 fwd<1max 0.000 all<1max 0.000 | speed 0.55/0.70 m/s yawrate(removed) 8.7 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 4.516,
+   "D_min": 1.217,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0004,
+   "speed_mean": 0.5521,
+   "speed_max": 0.7016,
+   "motion_dir_cyaw": -15.0
+  }
+ },
+ {
+  "scene": "gallery",
+  "seq": "near_lateral",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 14.48922377458329,
+  "world_az": 45,
+  "ref_cyaw": 30,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az+45 mean 0.090 persist 0.53 run 6.2s objd 1.55 ts0/3/6/9/12s [0.0, 0.0, 0.077, 0.272, 0.031] | mean-best az+35 0.128\nD_med 4.76 D_min 4.05 D<1 0.00 fwd<1max 0.002 all<1max 0.054 | speed 0.25/0.33 m/s yawrate(removed) 9.0 deg/s",
+  "obj": {
+   "az": 45,
+   "mean": 0.09035024791955948,
+   "q25": 0.0,
+   "persist": 0.525,
+   "run_s": 6.2,
+   "objd": 1.5541532039642334,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.0,
+    0.077,
+    0.272,
+    0.031
+   ]
+  },
+  "wall": {
+   "D_med": 4.7598,
+   "D_min": 4.048,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0021,
+   "all_lt10_max": 0.0537,
+   "speed_mean": 0.247,
+   "speed_max": 0.3307,
+   "motion_dir_cyaw": 75.5108
+  }
+ },
+ {
+  "scene": "gallery",
+  "seq": "curved_yaw",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 106.80940604716169,
+  "world_az": 50,
+  "ref_cyaw": -55,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az+50 mean 0.026 persist 0.44 run 3.9s objd 1.42 ts0/3/6/9/12s [0.0, 0.0, 0.025, 0.061, 0.033] | mean-best az+50 0.026\nD_med 4.25 D_min 4.12 D<1 0.00 fwd<1max 0.005 all<1max 0.183 | speed 0.31/0.40 m/s yawrate(removed) 11.6 deg/s",
+  "obj": {
+   "az": 50,
+   "mean": 0.026292899623513222,
+   "q25": 0.0,
+   "persist": 0.44166666666666665,
+   "run_s": 3.9000000000000004,
+   "objd": 1.4230176210403442,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.0,
+    0.025,
+    0.061,
+    0.033
+   ]
+  },
+  "wall": {
+   "D_med": 4.2535,
+   "D_min": 4.121,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0046,
+   "all_lt10_max": 0.1834,
+   "speed_mean": 0.3075,
+   "speed_max": 0.4009,
+   "motion_dir_cyaw": -109.1273
+  }
+ },
+ {
+  "scene": "studio",
+  "seq": "traverse",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 1.920461106817077,
+  "world_az": -60,
+  "ref_cyaw": -60,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az-60 mean 0.061 persist 0.52 run 3.6s objd 1.77 ts0/3/6/9/12s [0.0, 0.142, 0.0, 0.096, 0.127] | mean-best az-60 0.061\nD_med 3.32 D_min 1.69 D<1 0.00 fwd<1max 0.000 all<1max 0.003 | speed 0.33/0.44 m/s yawrate(removed) 7.5 deg/s",
+  "obj": {
+   "az": -60,
+   "mean": 0.06132758781313896,
+   "q25": 0.0,
+   "persist": 0.5166666666666667,
+   "run_s": 3.6,
+   "objd": 1.7654294967651367,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.142,
+    0.0,
+    0.096,
+    0.127
+   ]
+  },
+  "wall": {
+   "D_med": 3.3205,
+   "D_min": 1.685,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0027,
+   "speed_mean": 0.3255,
+   "speed_max": 0.436,
+   "motion_dir_cyaw": -1.9205
+  }
+ },
+ {
+  "scene": "studio",
+  "seq": "near_lateral",
+  "f0": 90,
+  "t0_s": 3.0,
+  "H_deg": 9.442388712550436,
+  "world_az": -20,
+  "ref_cyaw": -30,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az-20 mean 0.036 persist 0.65 run 4.9s objd 1.51 ts0/3/6/9/12s [0.0, 0.064, 0.018, 0.068, 0.023] | mean-best az-5 0.037\nD_med 5.78 D_min 5.25 D<1 0.00 fwd<1max 0.000 all<1max 0.095 | speed 0.31/0.41 m/s yawrate(removed) 6.0 deg/s",
+  "obj": {
+   "az": -20,
+   "mean": 0.036048419773578644,
+   "q25": 0.021773625165224075,
+   "persist": 0.65,
+   "run_s": 4.9,
+   "objd": 1.5112106800079346,
+   "ts_0_3_6_9_12": [
+    0.0,
+    0.064,
+    0.018,
+    0.068,
+    0.023
+   ]
+  },
+  "wall": {
+   "D_med": 5.7795,
+   "D_min": 5.25,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0951,
+   "speed_mean": 0.3068,
+   "speed_max": 0.4109,
+   "motion_dir_cyaw": 80.5576
+  }
+ },
+ {
+  "scene": "studio",
+  "seq": "curved_yaw",
+  "f0": 60,
+  "t0_s": 2.0,
+  "H_deg": 126.83356975808522,
+  "world_az": -10,
+  "ref_cyaw": -135,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az-10 mean 0.029 persist 0.47 run 2.9s objd 1.46 ts0/3/6/9/12s [0.045, 0.016, 0.0, 0.011, 0.034] | mean-best az-5 0.029\nD_med 2.55 D_min 1.95 D<1 0.00 fwd<1max 0.000 all<1max 0.077 | speed 0.44/0.53 m/s yawrate(removed) 12.5 deg/s",
+  "obj": {
+   "az": -10,
+   "mean": 0.02851434424519539,
+   "q25": 0.0,
+   "persist": 0.4666666666666667,
+   "run_s": 2.9000000000000004,
+   "objd": 1.4585939645767212,
+   "ts_0_3_6_9_12": [
+    0.045,
+    0.016,
+    0.0,
+    0.011,
+    0.034
+   ]
+  },
+  "wall": {
+   "D_med": 2.546,
+   "D_min": 1.952,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.077,
+   "speed_mean": 0.4354,
+   "speed_max": 0.5332,
+   "motion_dir_cyaw": -130.0249
+  }
+ },
+ {
+  "scene": "workshop",
+  "seq": "traverse",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 20.000000000000004,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.001)\nD_med 4.83 D_min 1.61 D<1 0.00 fwd<1max 0.000 all<1max 0.001 | speed 0.50/0.64 m/s yawrate(removed) 8.7 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 4.8303,
+   "D_min": 1.613,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0001,
+   "all_lt10_max": 0.0009,
+   "speed_mean": 0.5047,
+   "speed_max": 0.6414,
+   "motion_dir_cyaw": -20.0
+  }
+ },
+ {
+  "scene": "workshop",
+  "seq": "near_lateral",
+  "f0": 0,
+  "t0_s": 0.0,
+  "H_deg": -16.92046110681708,
+  "world_az": -80,
+  "ref_cyaw": -65,
+  "part2_candidate": true,
+  "tag": "",
+  "text": "obj(persist-best) az-80 mean 0.089 persist 0.28 run 3.3s objd 1.35 ts0/3/6/9/12s [0.281, 0.386, 0.0, 0.0, 0.0] | mean-best az-80 0.089\nD_med 6.05 D_min 4.23 D<1 0.00 fwd<1max 0.000 all<1max 0.001 | speed 0.56/0.75 m/s yawrate(removed) 7.5 deg/s",
+  "obj": {
+   "az": -80,
+   "mean": 0.08925715833902359,
+   "q25": 0.0,
+   "persist": 0.275,
+   "run_s": 3.3000000000000003,
+   "objd": 1.348656177520752,
+   "ts_0_3_6_9_12": [
+    0.281,
+    0.386,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "wall": {
+   "D_med": 6.05,
+   "D_min": 4.228,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0005,
+   "speed_mean": 0.5613,
+   "speed_max": 0.7517,
+   "motion_dir_cyaw": 106.9205
+  }
+ },
+ {
+  "scene": "workshop",
+  "seq": "curved_yaw",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 87.5,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.015)\nD_med 5.26 D_min 3.63 D<1 0.00 fwd<1max 0.000 all<1max 0.020 | speed 0.30/0.40 m/s yawrate(removed) 11.4 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 5.261,
+   "D_min": 3.632,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0196,
+   "speed_mean": 0.298,
+   "speed_max": 0.3999,
+   "motion_dir_cyaw": 2.5
+  }
+ },
+ {
+  "scene": "garden",
+  "seq": "traverse",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 15.000000000000009,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.000)\nD_med 13.09 D_min 7.30 D<1 0.00 fwd<1max 0.000 all<1max 0.000 | speed 1.26/1.60 m/s yawrate(removed) 8.7 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 13.089,
+   "D_min": 7.296,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0,
+   "speed_mean": 1.2619,
+   "speed_max": 1.6036,
+   "motion_dir_cyaw": -15.0
+  }
+ },
+ {
+  "scene": "garden",
+  "seq": "near_lateral",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 175.0,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.006)\nD_med 13.14 D_min 3.84 D<1 0.00 fwd<1max 0.000 all<1max 0.000 | speed 0.95/1.20 m/s yawrate(removed) 7.1 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 13.1445,
+   "D_min": 3.836,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0,
+   "speed_mean": 0.9464,
+   "speed_max": 1.2027,
+   "motion_dir_cyaw": -85.0
+  }
+ },
+ {
+  "scene": "garden",
+  "seq": "curved_yaw",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 87.5,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.000)\nD_med 17.96 D_min 17.74 D<1 0.00 fwd<1max 0.000 all<1max 0.000 | speed 0.41/0.50 m/s yawrate(removed) 12.2 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 17.9615,
+   "D_min": 17.738,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0,
+   "speed_mean": 0.4072,
+   "speed_max": 0.5011,
+   "motion_dir_cyaw": -87.5
+  }
+ },
+ {
+  "scene": "plaza",
+  "seq": "traverse",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 7.500000000000001,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.000)\nD_med 10.64 D_min 5.87 D<1 0.00 fwd<1max 0.000 all<1max 0.000 | speed 0.79/1.00 m/s yawrate(removed) 5.1 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 10.645,
+   "D_min": 5.874,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0,
+   "speed_mean": 0.7887,
+   "speed_max": 1.0022,
+   "motion_dir_cyaw": -7.5
+  }
+ },
+ {
+  "scene": "plaza",
+  "seq": "near_lateral",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 175.0,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.000)\nD_med 15.08 D_min 2.64 D<1 0.00 fwd<1max 0.000 all<1max 0.008 | speed 1.10/1.40 m/s yawrate(removed) 7.1 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 15.0835,
+   "D_min": 2.64,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0081,
+   "speed_mean": 1.1043,
+   "speed_max": 1.4031,
+   "motion_dir_cyaw": -85.0
+  }
+ },
+ {
+  "scene": "plaza",
+  "seq": "curved_yaw",
+  "f0": 45,
+  "t0_s": 1.5,
+  "H_deg": 5.000000000000001,
+  "world_az": null,
+  "ref_cyaw": null,
+  "part2_candidate": false,
+  "tag": "",
+  "text": "no near-object window (best mean 0.000)\nD_med 13.03 D_min 12.89 D<1 0.00 fwd<1max 0.000 all<1max 0.000 | speed 0.36/0.48 m/s yawrate(removed) 12.6 deg/s",
+  "obj": null,
+  "wall": {
+   "D_med": 13.034,
+   "D_min": 12.888,
+   "D_lt1": 0.0,
+   "fwd_lt10_max": 0.0,
+   "all_lt10_max": 0.0,
+   "speed_mean": 0.3569,
+   "speed_max": 0.4811,
+   "motion_dir_cyaw": 85.0
+  }
+ }
+]

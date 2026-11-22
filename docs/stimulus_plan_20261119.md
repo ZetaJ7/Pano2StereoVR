@@ -150,3 +150,25 @@ Stimuli/
 | near_F | apartment_0 seq_007，帧 0–299 | −30° |
 | train_near（第二部分练习） | apartment_0 seq_003，帧 175–474 | −90° |
 | train_indoor（第一部分练习，只需 Ours PA） | room_0 seq_003，帧 25–324 | — |
+
+## 12. 预实验版本的片段（用户 11-22 定稿，方案一）
+
+用户 11-22 决定：虚拟场景改为 Replica 与 Blender rich_scenes_v3 混用，每个场景在全部实验中只出现一次；贴墙的 vin_B（Replica office_1）与 dummy_indoor（Replica office_4）不再使用；第二部分保持每段 3 个试次（PA→PAw、PAw→PA、相同各 1 个）。配置版本 `v4-draft-2026-11-22`，P01–P40、T01–T05 已重新生成；AP01 只用于桌面自动检查，未改。Blender 片段的筛选与生成见 `docs/previews_blender_20261122/`。
+
+| 位置 | 片段 | 来源与场景 | 参考方向 |
+| --- | --- | --- | --- |
+| 第一部分练习 | train_indoor_room2（Ours） | Replica room_2，即备用片段 near_D_room2_ref30 的 PA | — |
+| 第一部分练习 | train_outdoor（Mono） | 不变 | — |
+| 第一部分 dummy | bin_C | Blender workshop traverse | — |
+| 第一部分正式（虚拟） | vin_A、vin_C | Replica apartment_0、room_0 | — |
+| 第一部分正式（虚拟） | bin_A、bout_A、bout_B | Blender cafe、garden、plaza（traverse） | — |
+| 第一部分正式（实拍） | rin_A–C、rout_A–C | 不变 | — |
+| 第二部分练习 | train_near_room1 | Replica room_1，即备用片段 near_C_room1_refm60 | −60° |
+| 第二部分正式 | bnear_A、bnear_B、bnear_D、bnear_F | Blender apartment curved_yaw、gallery near_lateral、studio traverse、bedroom curved_yaw | +55°、+30°、−60°、−10° |
+| 第二部分正式 | near_B、near_C | Replica hotel_0 seq_008、office_0 seq_002 | −120°、−60° |
+
+- 第一部分共 50 段：练习 2 段、dummy 1 组、正式 11 组（每组 4 种方法）。第二部分共 20 个试次：练习 2 个、正式 18 个。
+- 两段备用片段改用新的片段名，视频字节不变，sidecar 中记有 `renamed_from`。
+- 第二部分的 Replica 两段放在配置列表的最后，每位被试的两种相同配对在 Blender 与 Replica 内各自平衡。
+- 未使用但保留在 `Stimuli/` 中的片段：bin_B、bnear_C、bnear_E、btrain_near，以及 Replica 的 vin_B、dummy_indoor、train_indoor、near_A、near_D–F、train_near。
+- 预实验用的刺激只含清单引用的 92 个文件，放在本机 `D:\WorkSpace\E5_pilot_20261123\Stimuli\`（`SHA256SUMS`、`files.txt` 在其上一级）。

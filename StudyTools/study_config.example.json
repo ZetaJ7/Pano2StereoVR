@@ -1,6 +1,6 @@
 {
   "study_id": "Pano2Stereo-E5",
-  "config_version": "v3-draft-2026-11-19",
+  "config_version": "v4-draft-2026-11-22",
   "note": "Clip IDs are placeholders until the stimulus list is confirmed. Stimulus files are top-bottom stereo ERP (left eye on top). 4K clips are 5768x5768 (two 5768x2884 views); HELVIPAD clips keep their native 1932x966 per view.",
   "stimuli_dir": "Stimuli",
   "file_pattern": "{folder}/{clip_id}__{condition}.mp4",
@@ -14,7 +14,7 @@
       "training": "part2/practice",
       "main": "part2/near"
     },
-    "note": "刺激按类型放在 stimuli_dir 下的子文件夹（用户 11-19/11-20，见 docs/stimulus_plan_20261119.md 第 9 节）：第一部分练习 part1/practice、dummy part1/dummy、正式按片段的 cell（part1/virtual_indoor、part1/real_indoor、part1/real_outdoor）；第二部分练习 part2/practice、正式 part2/near。清单中的文件名带子文件夹（正斜杠），程序在 stimuli_dir 下解析"
+    "note": "刺激按类型放在 stimuli_dir 下的子文件夹（用户 11-19/11-20，见 docs/stimulus_plan_20261119.md 第 9 节）：第一部分练习 part1/practice、dummy part1/dummy、正式按片段的 cell（part1/virtual_indoor、part1/virtual_outdoor、part1/real_indoor、part1/real_outdoor）；第二部分练习 part2/practice、正式 part2/near。清单中的文件名带子文件夹（正斜杠），程序在 stimuli_dir 下解析"
   },
   "flow": [
     "checkin",
@@ -133,16 +133,28 @@
         "source": "replica"
       },
       {
-        "clip_id": "vin_B",
+        "clip_id": "vin_C",
         "cell": "virtual_indoor",
         "scene": "indoor",
         "source": "replica"
       },
       {
-        "clip_id": "vin_C",
+        "clip_id": "bin_A",
         "cell": "virtual_indoor",
         "scene": "indoor",
-        "source": "replica"
+        "source": "blender"
+      },
+      {
+        "clip_id": "bout_A",
+        "cell": "virtual_outdoor",
+        "scene": "outdoor",
+        "source": "blender"
+      },
+      {
+        "clip_id": "bout_B",
+        "cell": "virtual_outdoor",
+        "scene": "outdoor",
+        "source": "blender"
       },
       {
         "clip_id": "rin_A",
@@ -183,7 +195,7 @@
     ],
     "training": [
       {
-        "clip_id": "train_indoor",
+        "clip_id": "train_indoor_room2",
         "condition": "ours"
       },
       {
@@ -193,19 +205,19 @@
     ],
     "dummy": [
       {
-        "clip_id": "dummy_indoor",
+        "clip_id": "bin_C",
         "condition": "mono"
       },
       {
-        "clip_id": "dummy_indoor",
+        "clip_id": "bin_C",
         "condition": "ours"
       },
       {
-        "clip_id": "dummy_indoor",
+        "clip_id": "bin_C",
         "condition": "deepsynthesis"
       },
       {
-        "clip_id": "dummy_indoor",
+        "clip_id": "bin_C",
         "condition": "motionparallax"
       }
     ],
@@ -216,7 +228,7 @@
       "allow_review_on_rerate": true,
       "note": "组末汇总每段可回放（allow_review_on_rerate，用户 11-19 决定开启）；self_paced 默认 false，待用户确认"
     },
-    "note": "11-19 用户决定第一部分四种方法；deepsynthesis、motionparallax 的刺激尚未生成（QA 模式用占位片段）。dummy 改为 1 个片段 × 4 条件的一组，待用户确认"
+    "note": "11-19 用户决定第一部分四种方法；deepsynthesis、motionparallax 的刺激尚未生成（QA 模式用占位片段）。dummy 改为 1 个片段 × 4 条件的一组，待用户确认。11-22 用户决定（方案一：Replica 与 Blender 混用，每个场景在全部实验中只出现一次，排除贴墙的 vin_B office_1 与 dummy_indoor office_4）：正式虚拟 5 组为 vin_A（Replica apartment_0）、vin_C（Replica room_0）、bin_A（Blender cafe）、bout_A（Blender garden）、bout_B（Blender plaza）；dummy 为 bin_C（Blender workshop）；练习 train_indoor_room2（Replica room_2，即备用片段 near_D_room2_ref30 的 PA）与 train_outdoor"
   },
   "part2": {
     "conditions": [
@@ -225,16 +237,40 @@
     ],
     "file_patterns": {
       "paw": "{folder}/{clip_id}__paw_t{paw_theta}.mp4",
-      "note": "第二部分 PAw 文件按修正半径分变体（用户 11-20，方案 A）：{paw_theta} 在清单中保留为占位符，程序在自然注视范围测量后按被试选定的 θ 替换（如 part2/near/near_A__paw_t20.mp4）；PA 文件名不变。签到时检查全部变体是否存在"
+      "note": "第二部分 PAw 文件按修正半径分变体（用户 11-20，方案 A）：{paw_theta} 在清单中保留为占位符，程序在自然注视范围测量后按被试选定的 θ 替换（如 part2/near/bnear_A__paw_t20.mp4）；PA 文件名不变。签到时检查全部变体是否存在"
     },
     "same_pairs_per_clip": 1,
     "clips": [
       {
-        "clip_id": "near_A",
+        "clip_id": "bnear_A",
         "cell": "virtual_indoor",
         "scene": "indoor",
-        "source": "replica",
-        "reference_yaw_deg": 60.0,
+        "source": "blender",
+        "reference_yaw_deg": 55.0,
+        "reference_pitch_deg": 0.0
+      },
+      {
+        "clip_id": "bnear_B",
+        "cell": "virtual_indoor",
+        "scene": "indoor",
+        "source": "blender",
+        "reference_yaw_deg": 30.0,
+        "reference_pitch_deg": 0.0
+      },
+      {
+        "clip_id": "bnear_D",
+        "cell": "virtual_indoor",
+        "scene": "indoor",
+        "source": "blender",
+        "reference_yaw_deg": -60.0,
+        "reference_pitch_deg": 0.0
+      },
+      {
+        "clip_id": "bnear_F",
+        "cell": "virtual_indoor",
+        "scene": "indoor",
+        "source": "blender",
+        "reference_yaw_deg": -10.0,
         "reference_pitch_deg": 0.0
       },
       {
@@ -252,45 +288,21 @@
         "source": "replica",
         "reference_yaw_deg": -60.0,
         "reference_pitch_deg": 0.0
-      },
-      {
-        "clip_id": "near_D",
-        "cell": "virtual_indoor",
-        "scene": "indoor",
-        "source": "replica",
-        "reference_yaw_deg": 30.0,
-        "reference_pitch_deg": 0.0
-      },
-      {
-        "clip_id": "near_E",
-        "cell": "virtual_indoor",
-        "scene": "indoor",
-        "source": "replica",
-        "reference_yaw_deg": -30.0,
-        "reference_pitch_deg": 0.0
-      },
-      {
-        "clip_id": "near_F",
-        "cell": "virtual_indoor",
-        "scene": "indoor",
-        "source": "replica",
-        "reference_yaw_deg": -30.0,
-        "reference_pitch_deg": 0.0
       }
     ],
     "training": [
       {
-        "clip_id": "train_near",
+        "clip_id": "train_near_room1",
         "cond_a": "pa",
         "cond_b": "paw",
-        "reference_yaw_deg": -90.0,
+        "reference_yaw_deg": -60.0,
         "reference_pitch_deg": 0.0
       },
       {
-        "clip_id": "train_near",
+        "clip_id": "train_near_room1",
         "cond_a": "paw",
         "cond_b": "paw",
-        "reference_yaw_deg": -90.0,
+        "reference_yaw_deg": -60.0,
         "reference_pitch_deg": 0.0
       }
     ],
@@ -300,7 +312,7 @@
       "max_view_s": 0,
       "note": "片段播完一遍后循环，被试按扳机或空格进入下一段；min_view_s null = 一遍，max_view_s 0 = 不限；待用户确认"
     },
-    "reference_note": "参考方向（用户 11-20 定稿）：内容水平角，右为正，0 = 片段正前方，俯仰均为 0；near_A +60、near_B −120、near_C −60、near_D +30、near_E −30、near_F −30、train_near −90。片段来源见 docs/stimulus_plan_20261119.md 第 11 节"
+    "reference_note": "参考方向：内容水平角，右为正，0 = 片段正前方，俯仰均为 0，与生成 PAw 时的 gaze_forward_unit 相同。11-22 用户决定（方案一，每个场景只出现一次，相同配对保持每段 1 个）：Blender bnear_A apartment curved_yaw +55、bnear_B gallery near_lateral +30、bnear_D studio traverse −60、bnear_F bedroom curved_yaw −10（见 docs/previews_blender_20261122/index.md）；Replica near_B hotel_0 seq_008 −120、near_C office_0 seq_002 −60；练习 train_near_room1（Replica room_1，即备用片段 near_C_room1_refm60）−60。Replica 两段放在列表最后，使每位被试的两种相同配对在 Blender 与 Replica 内各自平衡。此前 Replica 定稿（用户 11-20）：near_A +60、near_B −120、near_C −60、near_D +30、near_E −30、near_F −30、train_near −90"
   },
   "pending_user_decision": {
     "note": "以下默认值待用户确认（11-19 走查后加入；程序只读取数值，不含任何通过或剔除规则）",

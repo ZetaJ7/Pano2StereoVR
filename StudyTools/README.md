@@ -125,7 +125,7 @@ v4 相对 v3：`stereotest.csv`、`part1.csv`、`part2.csv` 增加 `skipped`；`
 - 第一部分（用户 11-23：四种方法的比较全部为正式检验）：用组末确认后的最终评分；四种条件各自的 MOS；每项评分做 Friedman 检验（每位被试每种方法对片段取平均，只纳入四种方法都有值的被试，报告人数与 Kendall W）；`part1_pairs` 的 6 对两两比较，每位被试按片段配对（同一片段两个条件都有评分）求差值，再对片段等权平均，Wilcoxon 符号秩检验，双尾，在该项评分的 6 对之内 Holm 校正（`part1_correction`，三项评分分别校正、不合并）；每对报告配对数、差值中位数与 bootstrap 95% CI、均值、秩二列相关。次要分析（事先写明，不校正，6 对都算）：按片段的差值在片段间做双尾符号检验；每人只用序关系的统计量（后者高于前者的片段数减低于的片段数，除以片段数）做 Wilcoxon。按片段类别分层（描述）；逐片段 MOS；重评率与回放次数。
 - 第二部分（用户 11-23）：每人 H − F（真实配对与相同配对上答"有区别"的原始比例之差），总体统计量为各人 H − F 的均值，双尾被试内置换检验（固定每人答"有区别"的总次数，重排其在两类配对上的位置；次数与种子见 `part2_permutations`、`part2_permutation_seed`）；报告 H、F、H − F 的均值与 bootstrap 95% CI；z(H) − z(F)（对数线性校正）只作描述，不检验。偏好统一为"pose-aware 更好为正"，两种口径（答"没有区别"计 0，为 P4b；只用答"有区别"的试次，为次要）；P4a 单独检验，不与第一部分合并校正；P4b 只在 P4a 显著时按 α 检验（`p4b_requires`），报告实际进入检验的人数。逐片段 H、F、H − F、合并 z(H) − z(F)（描述）、偏好均值。
 - SSQ：P.919 §7.2.1 的 N、O、D、TS；`S_pre` → `S_mid1`（第一部分）、`S_mid2` → `S_post`（第二部分）与 `S_mid2` − `S_pre`（休息后的残余）只报数（差值中位数、均值、N）；`ssq_primary_contrast`（默认 `S_pre` → `S_post`）也只报数。实际休息时长（`break_s`）一并报告。
-- 立体视测试：逐被试各视差档（像素）正确数、“看不清”次数、″/px 与来源；通过标准属判定规则（`stereo_pass_rule`，如 `{"max_disparity_px": 4, "min_correct_per_level": 2}`：被试须在 4 px 档及所有更大的档位上各答对至少 2 次，更小的档位只报数），由用户定，未设定时只报告。2026-11-23 冻结前改正了判定方向（原先误为要求所有更小的档位）。
+- 立体视测试：逐被试各视差档（像素）正确数、“看不清”次数、″/px 与来源；通过标准属判定规则（`stereo_pass_rule`），由用户定，未设定时只报告。支持两种写法：`{"min_correct_total": 4}`，全部正式试次合计答对至少 4 次（现行，用户 11-23 晚定）；`{"max_disparity_px": 4, "min_correct_per_level": 2}`，被试须在 4 px 档及所有更大的档位上各答对至少 2 次，更小的档位只报数（冻结时的规则，2026-11-23 冻结前改正过判定方向）。
 - 注视练习：逐被试练习次数、每次最大头部偏离、程序阈值、最后一次是否在阈值内，只报告。
 - 自然注视范围：逐被试 a、θ、来源、删失数与提前结束数（`session.json` 记录值，并按 `eyerange_trace.csv` 逐帧数据与同一阈值、同一规则复算核对）；各方向 `head_onset_ecc_deg` 中位数（逐被试，以及各方向在被试间的分布：N、最小、四分位、中位数、最大），只报数。第二部分按 θ 分组的描述性结果（人数、H、F、H − F、z(H) − z(F) 与偏好均值），不做检验，不新增剔除规则。
 - 观看时长：第二部分每段观看时长、循环次数、每段最大头部偏离，第一部分每段观看时长，只报告分布。
@@ -149,7 +149,7 @@ python analyze_study.py --data StudyData --config study_config.example.json --an
 | `p4b_requires` | `"P4a"`（P4a 单独检验；P4b 只在 P4a 显著时按 α 检验） | 用户已定（11-23） |
 | `part2_permutations`、`part2_permutation_seed` | `100000`、`20261123`（P4a 置换检验） | 方法为用户已定（11-23），次数与种子为 Claude 的取值 |
 | `screening_primary` | `"none"`（主分析不筛除；峰度法与相关法口径照常给数，作敏感性分析） | 用户已定 |
-| `stereo_pass_rule` | `{"max_disparity_px": 4, "min_correct_per_level": 2}`（4 px 档 2 次都答对算通过，2 px 与 1 px 只报数；判定方向 11-23 改正） | 用户已定（11-23） |
+| `stereo_pass_rule` | `{"min_correct_total": 4}`（4、2、1 px 各 2 次共 6 个正式试次中答对至少 4 次算通过，“看不清”计为答错；纯猜通过的概率 0.038）。冻结时为 `{"max_disparity_px": 4, "min_correct_per_level": 2}`（4 px 档 2 次都答对） | 用户已定（11-23 晚，冻结后修改，见方案第 6 节） |
 | `session_modes` | `["formal"]` | 草稿，Claude 的建议 |
 | `include_aborted_partial` | `true`（中止会话已完成的部分进入分析；中止的被试不占 30 人名额） | 用户已定（11-23） |
 | `sensitivity_complete_only` | `true`（另报只用完整会话的结果） | 核查会话的建议 |

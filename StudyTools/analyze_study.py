@@ -92,7 +92,7 @@ DEFAULT_ANALYSIS = {
     "dropped_frame_fraction_threshold": None,
     "preference_no_difference_as_zero": True,
     "ssq_primary_contrast": ["S_pre", "S_post"],
-    "stereo_pass_rule": None,           # e.g. {"max_disparity_px": 2, "min_correct_per_level": 2}
+    "stereo_pass_rule": None,           # e.g. {"min_correct_total": 4} or {"max_disparity_px": 2, "min_correct_per_level": 2}
     "session_modes": None,              # None = every mode (QA sessions are listed); e.g. ["formal"]
     "include_aborted_partial": True,    # user 2026-11-23: no redo; the completed trials of an aborted session are analysed
     "sensitivity_complete_only": True,  # also report the results of complete sessions only (sensitivity)
@@ -769,7 +769,13 @@ def analyse_stereotest(people, acfg: dict) -> dict:
             cant[p["uid"]] = sum(1 for r in p["stereotest"] if r.get("block") == "main" and r.get("response") == "cant_tell")
     rule = acfg.get("stereo_pass_rule")
     passed = {}
-    if rule:
+    if rule and "min_correct_total" in rule:
+        # User 2026-11-23 evening (after the freeze, decided before any rating was looked at): pass = at least
+        # min_correct_total correct answers over all formal trials (3 levels x 2 = 6); "cant_tell" is not correct.
+        # Passing by guessing among the four shapes: P(>= 4 of 6 | p = 1/4) = 0.038. Replaces the 4 px 2/2 rule.
+        for uid, acc in per_p.items():
+            passed[uid] = sum(c for c, _ in acc.values()) >= rule["min_correct_total"]
+    elif rule:
         # max_disparity_px: the largest disparity a participant's threshold may have. The participant must reach
         # min_correct_per_level at this level and at every larger level; smaller levels are reported only.
         # 2026-11-23: the comparison was d <= limit (every smaller level required), which inverted the rule of the

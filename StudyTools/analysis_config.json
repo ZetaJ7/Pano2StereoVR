@@ -7,7 +7,7 @@
   "dropped_frame_fraction_threshold": 0.05,
   "preference_no_difference_as_zero": true,
   "ssq_primary_contrast": ["S_pre", "S_post"],
-  "stereo_pass_rule": {"max_disparity_px": 4, "min_correct_per_level": 2},
+  "stereo_pass_rule": {"min_correct_total": 4},
   "session_modes": ["formal"],
   "include_aborted_partial": true,
   "sensitivity_complete_only": true,
@@ -30,6 +30,6 @@
     "include_aborted_partial": "User 2026-11-23: an aborted session is not redone; its completed trials enter the analysis (Part 1 clips rated under both conditions of a pair, Part 2 H - F when at least one real and one identical pair were answered, SSQ measurements filled). Aborted participants do not count toward the 30 completed participants.",
     "sensitivity_complete_only": "Suggested by the manuscript session: results of complete sessions only, reported as a sensitivity analysis.",
     "head_deviation_threshold_deg": "Decided not to set (null): Part 2 interrupts and replays a segment online when the head leaves the tolerance; the analysis reports the deviation distribution only.",
-    "stereo_pass_rule": "User 2026-11-23: pass = both trials correct at the 4 px level (the largest formal level); the 2 px and 1 px levels are reported only. A participant who fails is excluded from the analysis."
+    "stereo_pass_rule": "User 2026-11-23 evening (after the freeze): pass = at least 4 correct answers over the 6 formal trials (4, 2 and 1 px, 2 each; cant_tell counts as not correct). Passing by guessing among the four shapes has probability 0.038. A participant who fails is excluded from the analysis. Replaces the frozen rule {max_disparity_px: 4, min_correct_per_level: 2} (both 4 px trials correct); decided after looking only at the stereo test answers of the first 7 participants, before any rating or SSQ result was computed. See docs/E5_AnalysisPlan_20261121.md section 6."
   }
 }

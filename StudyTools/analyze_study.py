@@ -14,7 +14,11 @@ Rows flagged skipped = 1 (QA skip control, contract v4; staff skip F8 with skip_
 when the folders are read.
 
 The unit of analysis is the session folder. A participant with several folders (for example an aborted
-attempt and a complete one) is listed in the report; only complete sessions enter the results.
+attempt and a complete one) is listed in the report. Complete sessions enter the results; with include_aborted_partial
+(user decision 2026-11-23: an aborted session is not redone) the completed trials of an aborted session enter as well
+when the participant has no complete session (Part 1: the clips rated under both conditions of a pair; Part 2: H - F
+when at least one real and one identical pair were answered; SSQ: the measurements filled). sensitivity_complete_only
+adds the results of complete sessions only.
 
 Outputs under --out: report.md, results.json, tables/*.csv, tables/*.tex, figs/*.png.
 
@@ -31,12 +35,23 @@ Methods and sources:
   * Correlation-based observer screening: BT.500-15 A1-2.3.3; r = min(Pearson, Spearman);
     threshold = MCT if mean(r) - sd(r) > MCT else mean(r) - sd(r); MCT = 0.7 for SS methods.
   * SSQ: ITU-T P.919 section 7.2.1 item sets and weights.
-  * d': z(H) - z(F) with the log-linear correction H = (hits + 0.5) / (n_signal + 1).
-  * Part 1: final ratings (after any re-rating in the group summary). Per participant, the test minus
-    reference difference is taken for every clip (and repetition) rated under both conditions and then
-    averaged over clips; Wilcoxon signed-rank over participants. The revision rate is reported.
-  * Paired comparisons: Wilcoxon signed-rank on per-participant values; Holm correction over the
-    primary family.
+  * Part 2 discrimination (P4a, user decision 2026-11-23): per participant H - F with raw proportions (H = share of
+    "different" answers on the real pairs, F = the same on the identical pairs); group statistic = mean of H - F;
+    two-sided within-participant permutation test: each participant's total number of "different" answers is kept
+    and its placement over real and identical pairs is re-drawn (hypergeometric), giving the null distribution of
+    the group mean (part2_permutations draws, part2_permutation_seed). z(H) - z(F) with the log-linear correction
+    H = (hits + 0.5) / (n_signal + 1) is reported as a description only (yes-no formula, not the d' of a same-different
+    task) and is not tested.
+  * Part 1 (user decision 2026-11-23: the four methods are compared in confirmatory tests): final ratings (after any
+    re-rating in the group summary). Per scale: Friedman test over the four conditions on per-participant means
+    (participants with every condition); every pair of part1_pairs by a Wilcoxon signed-rank test over participants on
+    the per-participant mean of the clip-paired differences (test - reference, equal clip weights); Holm over the six
+    pairs of the same scale (scales are corrected separately, not pooled). Secondary for every pair (uncorrected): a
+    sign test over the clip-level mean differences, and an order-only statistic per participant ((clips with
+    test > reference - clips with test < reference) / clips), Wilcoxon signed-rank over participants. The revision
+    rate is reported.
+  * Part 2: P4a is tested alone at alpha (not pooled with Part 1). P4b is tested at alpha only when P4a is significant
+    (p4b_requires); otherwise its numbers are reported without a test. SSQ changes are reported as numbers only.
   * Gaze training, viewing times and head deviation are reported as numbers only; no threshold is
     applied unless it is set in the analysis config.
   * Natural viewing range (contract v6, continuous sweeps, user 11-20): a and the PAw correction radius as
@@ -79,11 +94,19 @@ DEFAULT_ANALYSIS = {
     "ssq_primary_contrast": ["S_pre", "S_post"],
     "stereo_pass_rule": None,           # e.g. {"max_disparity_px": 2, "min_correct_per_level": 2}
     "session_modes": None,              # None = every mode (QA sessions are listed); e.g. ["formal"]
+    "include_aborted_partial": True,    # user 2026-11-23: no redo; the completed trials of an aborted session are analysed
+    "sensitivity_complete_only": True,  # also report the results of complete sessions only (sensitivity)
     "exclude_self_reported_vision": None,  # None = report only; True = drop participants reporting abnormal vision
-    "primary_family": ["P1", "P2", "P3", "P4a", "P4b", "P5"],
+    "alpha": 0.05,
+    "part1_pairs": [["mono", "ours"], ["deepsynthesis", "ours"], ["motionparallax", "ours"],
+                    ["mono", "deepsynthesis"], ["mono", "motionparallax"], ["deepsynthesis", "motionparallax"]],
+                                        # (reference, test): difference = test - reference; user 2026-11-23: all 6 pairs confirmatory
+    "part1_correction": "holm_within_scale",   # Holm over the pairs of the same scale; scales are not pooled
+    "part1_omnibus": "friedman",        # reported per scale; the pairwise tests do not depend on it
+    "p4b_requires": "P4a",              # P4b tested at alpha only if P4a (tested alone) is significant; None = no gate
+    "part2_permutations": 100000,       # within-participant permutation test of mean(H - F) (P4a)
+    "part2_permutation_seed": 20261123,
     "conditions_part1": ["mono", "ours", "deepsynthesis", "motionparallax"],
-    "part1_primary_pair": ["mono", "ours"],   # reference, test: P1-P3 of the primary family
-    "part1_extra_pairs": [["deepsynthesis", "ours"], ["motionparallax", "ours"]],  # exploratory, uncorrected; pending user decision
     "ssq_descriptive_contrasts": [["S_pre", "S_mid1"], ["S_mid2", "S_post"], ["S_pre", "S_mid2"]],  # numbers only
     "conditions_part2": ["pa", "paw"],
     "bootstrap_iterations": 10000,
@@ -213,9 +236,55 @@ def wilcoxon_summary(diffs, alternative: str, boot_iter: int, seed: int) -> dict
 
 
 def dprime(hits: int, n_signal: int, fas: int, n_noise: int) -> tuple[float, float, float]:
+    """z(H) - z(F) with the log-linear correction; description only (yes-no formula)."""
     h = (hits + 0.5) / (n_signal + 1.0)
     f = (fas + 0.5) / (n_noise + 1.0)
     return float(stats.norm.ppf(h) - stats.norm.ppf(f)), h, f
+
+
+def mean_ci_boot(values, boot_iter: int, seed: int) -> dict:
+    """Mean with a percentile bootstrap 95% CI over participants."""
+    x = np.asarray([v for v in values if not math.isnan(v)], dtype=float)
+    if x.size == 0:
+        return {"n": 0, "mean": math.nan, "ci95": [math.nan, math.nan]}
+    rng = np.random.default_rng(seed)
+    means = x[rng.integers(0, x.size, size=(boot_iter, x.size))].mean(axis=1)
+    return {"n": int(x.size), "mean": float(x.mean()),
+            "ci95": [float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))]}
+
+
+def perm_test_hf(per_p: dict, n_perm: int, seed: int) -> dict:
+    """Two-sided within-participant permutation test of mean(H - F) (P4a, user 2026-11-23).
+
+    Under no discrimination a participant's answers are exchangeable between real and identical pairs, so with the
+    participant's total k of "different" answers fixed, the number of hits is hypergeometric(n_signal, n_noise, k).
+    p = (1 + #{|null| >= |observed|}) / (1 + n_perm)."""
+    rows = [v for v in per_p.values() if v["n_signal"] and v["n_noise"]]
+    out = {"n": len(rows), "mean_hf": math.nan, "p": math.nan, "n_perm": int(n_perm), "seed": int(seed)}
+    if not rows:
+        return out
+    obs = float(np.mean([v["hits"] / v["n_signal"] - v["fas"] / v["n_noise"] for v in rows]))
+    rng = np.random.default_rng(seed)
+    null = np.zeros(n_perm)
+    for v in rows:
+        ns, nn, k = int(v["n_signal"]), int(v["n_noise"]), int(v["hits"] + v["fas"])
+        if 0 < k < ns + nn:
+            h0 = rng.hypergeometric(ns, nn, k, size=n_perm)
+            null += h0 / ns - (k - h0) / nn
+        # k = 0 or k = ns + nn: H - F = 0 in every permutation
+    null /= len(rows)
+    out["mean_hf"] = obs
+    out["p"] = float((1 + np.sum(np.abs(null) >= abs(obs) - 1e-12)) / (1 + n_perm))
+    out["null_q025_q975"] = [float(np.percentile(null, 2.5)), float(np.percentile(null, 97.5))]
+    return out
+
+
+def sign_test(values) -> dict:
+    """Two-sided exact sign test against 0 (zeros dropped)."""
+    x = [v for v in values if not math.isnan(v)]
+    pos, neg = sum(v > 0 for v in x), sum(v < 0 for v in x)
+    p = float(stats.binomtest(pos, pos + neg, 0.5).pvalue) if pos + neg else math.nan
+    return {"n": len(x), "pos": int(pos), "neg": int(neg), "zero": int(len(x) - pos - neg), "p": p}
 
 
 # ----------------------------------------------------------------------------- screening
@@ -323,12 +392,17 @@ def playback_flags(people: list[dict], thr) -> dict:
 
 
 def analyse_part1(people, keep: set[str], cfg: dict, acfg: dict, excluded_trials: set) -> dict:
-    """Final ratings. MOS per condition from per-participant means; tests on per-participant means of
-    clip-paired differences (only clips rated under both conditions by that participant)."""
-    c_ref, c_test = acfg["part1_primary_pair"]
-    conditions = list(dict.fromkeys(list(acfg["conditions_part1"]) + [c_ref, c_test]))
-    res = {"per_condition": {}, "per_clip": {}, "tests": {}, "per_scene": {}, "pairs": {}, "extra": {},
-           "conditions": conditions}  # per_scene is keyed by clip cell
+    """Final ratings (user decision 2026-11-23: the four methods are compared in confirmatory tests).
+
+    Per scale: MOS per condition from per-participant means; Friedman test over the conditions on the per-participant
+    means (participants with a value under every condition); every pair of part1_pairs by a Wilcoxon signed-rank test
+    on per-participant means of clip-paired differences (test - reference, only clips rated under both conditions by
+    that participant, equal clip weights), Holm over the pairs of the same scale (part1_correction). Secondary per
+    pair: sign test over the clip-level mean differences and the order-only statistic. Per cell: descriptive."""
+    conditions = list(acfg["conditions_part1"])
+    pairs = [tuple(x) for x in acfg["part1_pairs"]]
+    res = {"per_condition": {}, "per_clip": {}, "friedman": {}, "pairwise": {}, "holm": {}, "pair_counts": {},
+           "secondary": {}, "per_scene": {}, "conditions": conditions, "pairs": pairs}
     rows = [(p["uid"], r) for p in people if p["uid"] in keep for r in p["part1"]
             if r["block"] == "main" and (p["uid"], "1", r["trial_index"]) not in excluded_trials]
     scene_of = {c["clip_id"]: c.get("cell") or c.get("scene", "") for c in cfg["part1"]["clips"]}
@@ -351,24 +425,49 @@ def analyse_part1(people, keep: set[str], cfg: dict, acfg: dict, excluded_trials
         for (clip, cond), vals in clip_scores.items():
             mean, sd, delta, n = bt500_ci(vals)
             res["per_clip"][(s, clip, cond)] = {"mos": mean, "sd": sd, "ci95": delta, "n": n}
-        pdiff = defaultdict(list)
-        sdiff = defaultdict(lambda: defaultdict(list))
-        for (uid, clip, _rep), cv in by_clip.items():
-            if c_ref in cv and c_test in cv:
-                d = cv[c_test] - cv[c_ref]
-                pdiff[uid].append(d)
-                sdiff[scene_of.get(clip, "")][uid].append(d)
-        diffs = [float(np.mean(v)) for v in pdiff.values()]
-        res["tests"][s] = wilcoxon_summary(diffs, a, it, sd_)
-        res["pairs"][s] = {"participants": len(pdiff), "clip_pairs": int(sum(len(v) for v in pdiff.values()))}
-        for scene, dd in sdiff.items():
-            res["per_scene"][(s, scene)] = wilcoxon_summary([float(np.mean(v)) for v in dd.values()], a, it, sd_)
-        for ref, test in acfg.get("part1_extra_pairs") or []:
-            pd_ = defaultdict(list)
-            for (uid, _clip, _rep), cv in by_clip.items():
+        # omnibus: Friedman over the conditions (participants with every condition)
+        full = [uid for uid in pm if all(pm[uid][c] for c in conditions)]
+        fr = {"n": len(full), "k": len(conditions), "chi2": math.nan, "p": math.nan, "kendall_w": math.nan}
+        if len(full) >= 2 and len(conditions) >= 3:
+            cols = [[float(np.mean(pm[uid][c])) for uid in full] for c in conditions]
+            st = stats.friedmanchisquare(*cols)
+            fr.update(chi2=float(st.statistic), p=float(st.pvalue),
+                      kendall_w=float(st.statistic) / (len(full) * (len(conditions) - 1)))
+        res["friedman"][s] = fr
+        # pairwise Wilcoxon, Holm within the scale; secondary analyses and per-cell description per pair
+        pvals = {}
+        for ref, test in pairs:
+            pdiff = defaultdict(list)
+            sdiff = defaultdict(lambda: defaultdict(list))
+            clip_d = defaultdict(list)
+            uid_clip = defaultdict(lambda: defaultdict(list))
+            for (uid, clip, _rep), cv in by_clip.items():
                 if ref in cv and test in cv:
-                    pd_[uid].append(cv[test] - cv[ref])
-            res["extra"][(s, ref, test)] = wilcoxon_summary([float(np.mean(v)) for v in pd_.values()], a, it, sd_)
+                    d = cv[test] - cv[ref]
+                    pdiff[uid].append(d)
+                    sdiff[scene_of.get(clip, "")][uid].append(d)
+                    clip_d[clip].append(d)
+                    uid_clip[uid][clip].append(d)
+            t = wilcoxon_summary([float(np.mean(v)) for v in pdiff.values()], a, it, sd_)
+            res["pairwise"][(s, ref, test)] = t
+            pvals[(ref, test)] = t["p"]
+            res["pair_counts"][(s, ref, test)] = {"participants": len(pdiff),
+                                                  "clip_pairs": int(sum(len(v) for v in pdiff.values()))}
+            for scene, dd in sdiff.items():
+                res["per_scene"][(s, ref, test, scene)] = wilcoxon_summary([float(np.mean(v)) for v in dd.values()], a, it, sd_)
+            clip_means = {clip: float(np.mean(v)) for clip, v in sorted(clip_d.items())}
+            order_stat = []
+            for uid, cd in uid_clip.items():
+                m = [float(np.mean(v)) for v in cd.values()]
+                order_stat.append((sum(x > 0 for x in m) - sum(x < 0 for x in m)) / len(m))
+            res["secondary"][(s, ref, test)] = {"by_clip": {**sign_test(list(clip_means.values())), "clip_means": clip_means},
+                                                "order_stat": wilcoxon_summary(order_stat, a, it, sd_)}
+        if acfg.get("part1_correction") == "holm_within_scale":
+            adj = holm(pvals)
+        else:
+            adj = {k: math.nan for k in pvals}
+        for (ref, test), v in adj.items():
+            res["holm"][(s, ref, test)] = v
     return res
 
 
@@ -502,7 +601,9 @@ def part2_by_theta(people, part2: dict) -> dict:
     for t, vs in groups.items():
         hits, ns, fas, nn = (sum(v[k] for v in vs) for k in ("hits", "n_signal", "fas", "n_noise"))
         out[t] = {"n": len(vs), "hit_rate": hits / ns if ns else math.nan, "fa_rate": fas / nn if nn else math.nan,
-                  "dprime_mean": float(np.mean([v["dprime"] for v in vs])),
+                  "H_mean": float(np.mean([v["H"] for v in vs])), "F_mean": float(np.mean([v["F"] for v in vs])),
+                  "HF_mean": float(np.mean([v["HF"] for v in vs])),
+                  "dprime_mean": float(np.mean([v["dprime_loglinear"] for v in vs])),
                   "pref_mean": float(np.nanmean([v["pref_mean"] for v in vs])) if any(not math.isnan(v["pref_mean"]) for v in vs) else math.nan,
                   "pref_mean_diff_only": (float(np.nanmean([v["pref_mean_diff_only"] for v in vs]))
                                           if any(not math.isnan(v["pref_mean_diff_only"]) for v in vs) else math.nan)}
@@ -576,23 +677,31 @@ def analyse_part2(people, keep: set[str], acfg: dict, excluded_trials: set) -> d
                 pc["fas"] += diff
         if n_sig == 0 or n_noise == 0:
             continue
-        d, h, f = dprime(hits, n_sig, fas, n_noise)
-        per_p[p["uid"]] = {"dprime": d, "H": h, "F": f, "hits": hits, "n_signal": n_sig, "fas": fas,
-                           "n_noise": n_noise,
+        d, h_ll, f_ll = dprime(hits, n_sig, fas, n_noise)
+        h, f = hits / n_sig, fas / n_noise
+        per_p[p["uid"]] = {"H": h, "F": f, "HF": h - f, "dprime_loglinear": d, "H_loglinear": h_ll, "F_loglinear": f_ll,
+                           "hits": hits, "n_signal": n_sig, "fas": fas, "n_noise": n_noise,
                            "pref_mean": float(np.mean(prefs)) if prefs else math.nan,
                            "pref_mean_diff_only": float(np.mean(prefs_diff_only)) if prefs_diff_only else math.nan}
-    dps = [v["dprime"] for v in per_p.values()]
     prefs = [v["pref_mean"] for v in per_p.values()]
     prefs_do = [v["pref_mean_diff_only"] for v in per_p.values()]
     clip_tab = {}
     for clip, c in per_clip.items():
-        d, h, f = dprime(c["hits"], c["n_signal"], c["fas"], c["n_noise"]) if c["n_signal"] and c["n_noise"] else (math.nan,) * 3
+        ok = c["n_signal"] and c["n_noise"]
+        d = dprime(c["hits"], c["n_signal"], c["fas"], c["n_noise"])[0] if ok else math.nan
+        h = c["hits"] / c["n_signal"] if c["n_signal"] else math.nan
+        f = c["fas"] / c["n_noise"] if c["n_noise"] else math.nan
         mean, sd, delta, n = bt500_ci(c["pref"])
-        clip_tab[clip] = {"pooled_dprime": d, "H": h, "F": f, "pref_mean": mean, "pref_ci95": delta, "n_pref": n}
+        clip_tab[clip] = {"pooled_dprime_loglinear": d, "H": h, "F": f, "HF": h - f, "pref_mean": mean, "pref_ci95": delta,
+                          "n_pref": n}
     a, it, sd_ = acfg["alternative"], acfg["bootstrap_iterations"], acfg["bootstrap_seed"]
+    vals = list(per_p.values())
     return {"per_participant": per_p, "per_clip": clip_tab,
-            "dprime_test": wilcoxon_summary(dps, a, it, sd_),
-            "dprime_mean_ci": bt500_ci(dps),
+            "hf_test": perm_test_hf(per_p, acfg["part2_permutations"], acfg["part2_permutation_seed"]),
+            "H_mean_ci": mean_ci_boot([v["H"] for v in vals], it, sd_),
+            "F_mean_ci": mean_ci_boot([v["F"] for v in vals], it, sd_),
+            "HF_mean_ci": mean_ci_boot([v["HF"] for v in vals], it, sd_),
+            "dprime_loglinear_mean_ci": bt500_ci([v["dprime_loglinear"] for v in vals]),
             "pref_test": wilcoxon_summary(prefs, a, it, sd_),
             "pref_test_diff_only": wilcoxon_summary(prefs_do, a, it, sd_)}
 
@@ -661,9 +770,13 @@ def analyse_stereotest(people, acfg: dict) -> dict:
     rule = acfg.get("stereo_pass_rule")
     passed = {}
     if rule:
+        # max_disparity_px: the largest disparity a participant's threshold may have. The participant must reach
+        # min_correct_per_level at this level and at every larger level; smaller levels are reported only.
+        # 2026-11-23: the comparison was d <= limit (every smaller level required), which inverted the rule of the
+        # analysis plan; corrected to d >= limit before the freeze (no study data were analysed with the old rule).
         limit = rule.get("max_disparity_px", rule.get("max_disparity_arcsec"))
         for uid, acc in per_p.items():
-            need = [d for d in acc if d <= limit]
+            need = [d for d in acc if d >= limit]
             passed[uid] = bool(need) and all(acc[d][0] >= rule["min_correct_per_level"] for d in need)
     return {"per_participant": per_p, "levels": sorted(levels, reverse=True), "passed": passed, "unit": unit,
             "arcsec_per_px": scale, "cant_tell": cant}
@@ -739,20 +852,20 @@ def make_figures(out: Path, p1: dict, p2: dict, ssq: dict, acfg: dict) -> list[s
     plt.close(fig)
     figs.append("figs/part1_mos.png")
 
-    dps = [v["dprime"] for v in p2["per_participant"].values()]
+    hfs = [v["HF"] for v in p2["per_participant"].values()]
     prefs = [v["pref_mean"] for v in p2["per_participant"].values()]
-    if dps:
+    if hfs:
         fig, axs = plt.subplots(1, 2, figsize=(6.4, 2.8))
-        axs[0].hist(dps, bins=12)
+        axs[0].hist(hfs, bins=12)
         axs[0].axvline(0, color="k", lw=0.8)
-        axs[0].set_xlabel("d' per participant")
+        axs[0].set_xlabel("H - F per participant")
         axs[1].hist(prefs, bins=12)
         axs[1].axvline(0, color="k", lw=0.8)
         axs[1].set_xlabel("Mean preference (+ = pose-aware)")
         fig.tight_layout()
-        fig.savefig(out / "figs" / "part2_dprime_pref.png", dpi=200)
+        fig.savefig(out / "figs" / "part2_hf_pref.png", dpi=200)
         plt.close(fig)
-        figs.append("figs/part2_dprime_pref.png")
+        figs.append("figs/part2_hf_pref.png")
     return figs
 
 
@@ -791,16 +904,44 @@ def run(args) -> int:
     if st["passed"]:
         excluded_by_rule |= {uid for uid, ok in st["passed"].items() if not ok}
     complete -= excluded_by_rule
-    incomplete = sorted({p["uid"] for p in people} - complete)
 
-    pids, pres, u = part1_matrix([p for p in people if p["uid"] in complete])
+    def n_main(q) -> int:
+        return (sum(1 for r in q["part1"] if r.get("block") == "main")
+                + sum(1 for r in q["part2"] if r.get("block") == "main"))
+
+    by_pid = defaultdict(list)
+    for p in people:
+        by_pid[p["pid"]].append(p)
+    partial = set()
+    if acfg.get("include_aborted_partial"):
+        for pid, qs in by_pid.items():
+            if any(q["session"].get("status") == "complete" for q in qs):
+                continue  # a complete session of this participant exists; aborted attempts stay out
+            cand = [q for q in qs if q["uid"] not in excluded_by_rule and n_main(q) > 0]
+            if cand:
+                partial.add(max(cand, key=n_main)["uid"])
+    analysed = complete | partial
+    incomplete = sorted({p["uid"] for p in people} - analysed)
+    progress = {}
+    for p in people:
+        if p["session"].get("status") != "complete":
+            progress[p["uid"]] = {
+                "status": p["session"].get("status", ""), "reason": p["session"].get("abort_reason", ""),
+                "part1_main": sum(1 for r in p["part1"] if r.get("block") == "main"),
+                "part2_main": sum(1 for r in p["part2"] if r.get("block") == "main"),
+                "ssq": [r.get("measurement", "") for r in p["ssq"]],
+                "analysed": p["uid"] in partial}
+
+    pids, pres, u = part1_matrix([p for p in people if p["uid"] in analysed])
     kurt = screen_kurtosis(pids, u)
     corr = screen_correlation(pids, u, acfg["correlation_mct"])
     variants = {
-        "none": set(complete),
-        "kurtosis": {uid for uid in complete if not kurt.get(uid, {}).get("reject", False)},
-        "correlation": {uid for uid in complete if not corr["observers"].get(uid, {}).get("reject", False)},
+        "none": set(analysed),
+        "kurtosis": {uid for uid in analysed if not kurt.get(uid, {}).get("reject", False)},
+        "correlation": {uid for uid in analysed if not corr["observers"].get(uid, {}).get("reject", False)},
     }
+    if acfg.get("sensitivity_complete_only"):
+        variants["complete_only"] = set(complete)
 
     hd = head_deviation(people)
     thr = acfg["head_deviation_threshold_deg"]
@@ -813,24 +954,33 @@ def run(args) -> int:
         p1 = analyse_part1(people, keep, cfg, acfg, excluded_trials)
         p2 = analyse_part2(people, keep, acfg, excluded_trials)
         sq = analyse_ssq(people, keep, acfg)
-        pre, post = acfg["ssq_primary_contrast"]
-        family = {"P1": p1["tests"]["depth_quality"]["p"], "P2": p1["tests"]["visual_comfort"]["p"],
-                  "P3": p1["tests"]["artifact_annoyance"]["p"], "P4a": p2["dprime_test"]["p"],
-                  "P4b": p2["pref_test"]["p"], "P5": sq["contrasts"][(pre, post, "TS")]["p"]}
-        family = {k: v for k, v in family.items() if k in acfg["primary_family"]}
-        results[name] = {"part1": p1, "part2": p2, "ssq": sq, "n": len(keep), "family_p": family,
-                         "family_holm": holm(family), "part1_revisions": part1_revision_summary(people, keep),
+        alpha, gate = acfg["alpha"], acfg.get("p4b_requires")
+        p4a = {"p": p2["hf_test"]["p"], "alpha": alpha}
+        p4a["reject"] = None if math.isnan(p4a["p"]) else bool(p4a["p"] < alpha)
+        p4b = {"requires": gate, "alpha": alpha, "p": p2["pref_test"]["p"], "n": p2["pref_test"]["n"],
+               "tested": gate is None, "gate_met": None}
+        if gate == "P4a":
+            p4b["gate_met"] = p4a["reject"]
+            p4b["tested"] = bool(p4a["reject"])
+        results[name] = {"part1": p1, "part2": p2, "ssq": sq, "n": len(keep), "p4a": p4a, "p4b": p4b,
+                         "part1_revisions": part1_revision_summary(people, keep),
                          "part2_by_theta": part2_by_theta(people, p2)}
     gaze = gaze_training_summary(people)
-    eye = eye_range_summary(people, complete)
-    viewing = viewing_summary(people, complete)
+    eye = eye_range_summary(people, analysed)
+    viewing = viewing_summary(people, analysed)
 
     # ------------------------------------------------------------------ report
     L = []
     L.append("# Pano2Stereo 主观实验分析报告\n")
     if simulated:
         L.append(f"> **模拟数据**：{len(simulated)} 个会话的 session.json 标记为 simulated。本报告只用于检查程序，数字不是实验结果。\n")
-    L.append(f"- 会话文件夹：{len(people)}；完整完成并进入分析：{len(complete)}；其余：{', '.join(incomplete) or '无'}")
+    L.append(f"- 会话文件夹：{len(people)}；完整完成并进入分析：{len(complete)}；中止但已完成部分进入分析：{len(partial)}"
+             f"（{', '.join(sorted(partial)) or '无'}）；未进入分析：{', '.join(incomplete) or '无'}")
+    if progress:
+        L.append("- 未完成的会话（status ≠ complete）完成到哪里：" + "；".join(
+            f"{uid}（{v['status'] or '—'}{'，' + v['reason'] if v['reason'] else ''}）第一部分正式 {v['part1_main']} 段、"
+            f"第二部分正式 {v['part2_main']} 个、SSQ {'/'.join(v['ssq']) or '无'}，{'进入分析' if v['analysed'] else '未进入分析'}"
+            for uid, v in sorted(progress.items())))
     L.append("- 会话模式：" + "；".join(f"{m} {len(v)}" for m, v in sorted(modes.items()))
              + (f"（QA 会话：{', '.join(modes['qa'])}）" if modes.get("qa") else "")
              + ("；按配置只分析 " + ", ".join(acfg["session_modes"]) if acfg.get("session_modes") else "；未按模式筛选"))
@@ -843,7 +993,11 @@ def run(args) -> int:
     staff_rows = {p["uid"]: {f: v.count("staff") for f, v in p["skip_reasons"].items() if v.count("staff")} for p in people}
     L.append("- 其中主试跳过（skip_reason = staff）：" + ("；".join(f"{u} " + "，".join(f"{f} {n} 行" for f, n in v.items())
                                                         for u, v in sorted(staff_rows.items()) if v) or "无"))
-    L.append(f"- 检验方向：{acfg['alternative']}；主要比较组：{', '.join(acfg['primary_family'])}（Holm 校正）")
+    gate = acfg.get("p4b_requires")
+    L.append(f"- 检验方向：{acfg['alternative']}；α = {acfg['alpha']}；第一部分：每项评分做 Friedman 总体检验，"
+             f"{len(acfg['part1_pairs'])} 对两两 Wilcoxon 在该项评分内 Holm 校正（三项评分分别校正）；第二部分：P4a 单独检验，P4b "
+             + (f"只在 {gate} 显著时检验，否则只报数" if gate else "不设前提") + "；SSQ 只报数")
+    L.append(f"- 第二部分 P4a：每人 H − F（原始比例）的均值，被试内置换检验 {acfg['part2_permutations']} 次，种子 {acfg['part2_permutation_seed']}")
     L.append(f"- 头部偏离阈值：{thr if thr is not None else '未设定（只报告分布）'}；丢帧比例阈值："
              f"{acfg['dropped_frame_fraction_threshold'] if acfg['dropped_frame_fraction_threshold'] is not None else '未设定（只报告分布）'}")
     sp = acfg["screening_primary"]
@@ -894,55 +1048,68 @@ def run(args) -> int:
               [[pid, kurt[pid]["P"], kurt[pid]["Q"], kurt[pid]["ratio1"], kurt[pid]["ratio2"], kurt[pid]["reject"],
                 corr["observers"].get(pid, {}).get("r"), corr["observers"].get(pid, {}).get("reject")] for pid in pids])
 
-    c_ref, c_test = acfg["part1_primary_pair"]
     c_pa, c_paw = acfg["conditions_part2"]
-    for name in ("none", "kurtosis", "correlation"):
+    alpha = acfg["alpha"]
+    variant_label = {"none": "none（主分析：完整会话 + 中止会话已完成的部分）", "kurtosis": "kurtosis（敏感性）",
+                     "correlation": "correlation（敏感性）", "complete_only": "complete_only（只用完整会话，敏感性）"}
+    for name in [n for n in ("none", "kurtosis", "correlation", "complete_only") if n in results]:
         R = results[name]
-        L.append(f"## 2. 结果（筛除口径：{name}，N = {R['n']}）\n")
-        L.append(f"### 2.1 第一部分（主要比较：{c_test} 对 {c_ref}）\n")
+        L.append(f"## 2. 结果（筛除口径：{variant_label[name]}，N = {R['n']}）\n")
+        L.append("### 2.1 第一部分（四种方法，正式检验）\n")
         conds = R["part1"]["conditions"]
         L.append(md_table(["量表"] + [f"{c} MOS ± 95% CI" for c in conds],
                           [[SCALE_LABEL[s]] + [f"{fmt(R['part1']['per_condition'][(s, c)]['mos'])} ± {fmt(R['part1']['per_condition'][(s, c)]['ci95'])}"
                                                for c in conds] for s in SCALES]))
         L.append("")
-        rows, csv_rows = [], []
+        csv_rows = []
         for s in SCALES:
-            a = R["part1"]["per_condition"][(s, c_ref)]
-            b = R["part1"]["per_condition"][(s, c_test)]
-            t = R["part1"]["tests"][s]
-            rows.append([SCALE_LABEL[s], f"{fmt(a['mos'])} ± {fmt(a['ci95'])}", f"{fmt(b['mos'])} ± {fmt(b['ci95'])}",
-                         fmt(t["median_diff"]), f"[{fmt(t['median_ci95'][0])}, {fmt(t['median_ci95'][1])}]",
-                         fmt(t["W"], 1), fmt_p(t["p"]), fmt(t["rank_biserial"])])
-            csv_rows.append([s, a["mos"], a["ci95"], b["mos"], b["ci95"], t["median_diff"], *t["median_ci95"],
-                             t["W"], t["p"], t["rank_biserial"], t["n"]])
-        L.append(md_table(["量表", f"{c_ref} MOS ± 95% CI", f"{c_test} MOS ± 95% CI", "差值中位数",
-                           "中位数 95% CI（bootstrap）", "W", "p", "秩二列相关 r"], rows))
-        pr = R["part1"]["pairs"]
-        L.append("\n评分为组末确认后的最终评分。差值按被试内同一片段配对（" + "；".join(
-            f"{SCALE_LABEL[s].split()[0]} {pr[s]['participants']} 人 {pr[s]['clip_pairs']} 对" for s in SCALES) + "）。")
+            fr = R["part1"]["friedman"][s]
+            L.append(f"\n**{SCALE_LABEL[s]}**：Friedman χ² = {fmt(fr['chi2'])}，k = {fr['k']}，N = {fr['n']}（{len(conds)} 种方法都有值的被试），"
+                     f"p {fmt_p(fr['p'])}，Kendall W = {fmt(fr['kendall_w'], 3)}。两两比较（Wilcoxon 符号秩，双尾，本项评分 "
+                     f"{len(R['part1']['pairs'])} 对内 Holm 校正）：\n")
+            rows = []
+            for ref, test in R["part1"]["pairs"]:
+                t = R["part1"]["pairwise"][(s, ref, test)]
+                h = R["part1"]["holm"][(s, ref, test)]
+                pc = R["part1"]["pair_counts"][(s, ref, test)]
+                verdict = "—" if math.isnan(h) else ("拒绝" if h < alpha else "不拒绝")
+                rows.append([f"{test} − {ref}", f"{pc['participants']} / {pc['clip_pairs']}", fmt(t["median_diff"]),
+                             f"[{fmt(t['median_ci95'][0])}, {fmt(t['median_ci95'][1])}]", fmt(t["mean_diff"]), fmt(t["W"], 1),
+                             fmt_p(t["p"]), fmt_p(h), fmt(t["rank_biserial"]), verdict])
+                csv_rows.append([s, ref, test, pc["participants"], pc["clip_pairs"], t["median_diff"], *t["median_ci95"],
+                                 t["mean_diff"], t["W"], t["p"], h, t["rank_biserial"], t["n"]])
+            L.append(md_table(["配对（后者 − 前者）", "被试 / 片段对", "差值中位数", "中位数 95% CI（bootstrap）", "均值", "W", "p",
+                               "Holm 校正 p", "秩二列相关 r", f"α = {alpha}"], rows))
+        L.append("\n评分为组末确认后的最终评分。差值按被试内同一片段配对，每人先对片段等权平均。")
         RV = R["part1_revisions"]
         L.append(f"重评：正式试次 {RV['n_trials']} 个，有重评记录 {fmt(RV['revised_rate'] * 100 if RV['n_trials'] else math.nan, 1)}%，"
                  f"最终评分与首次评分不同 {fmt(RV['changed_rate'] * 100 if RV['n_trials'] else math.nan, 1)}%；"
                  "平均绝对改动 " + "，".join(f"{SCALE_LABEL[s].split()[0]} {fmt(RV['mean_abs_change'][s])}" for s in SCALES)
                  + f"；组末回放 {RV['replays']} 次。")
-        if R["part1"]["extra"]:
-            L.append("\n其余配对（探索性，未校正；比较组待用户确认）：\n")
-            L.append(md_table(["量表", "配对（后者 − 前者）", "N", "差值中位数", "p（未校正）"],
-                              [[SCALE_LABEL[s], f"{test} − {ref}", str(t["n"]), fmt(t["median_diff"]), fmt_p(t["p"])]
-                               for (s, ref, test), t in R["part1"]["extra"].items()]))
         write_csv(out / "tables" / f"part1_{name}.csv",
-                  ["scale", f"{c_ref}_mos", f"{c_ref}_ci95", f"{c_test}_mos", f"{c_test}_ci95", "median_diff",
-                   "median_ci_lo", "median_ci_hi", "W", "p", "rank_biserial", "n"], csv_rows)
-        write_tex(out / "tables" / f"part1_{name}.tex", ["Scale", c_ref, c_test, "$p$"],
-                  [[s.replace("_", " "), f"{fmt(R['part1']['per_condition'][(s, c_ref)]['mos'])}$\\pm${fmt(R['part1']['per_condition'][(s, c_ref)]['ci95'])}",
-                    f"{fmt(R['part1']['per_condition'][(s, c_test)]['mos'])}$\\pm${fmt(R['part1']['per_condition'][(s, c_test)]['ci95'])}",
-                    fmt_p(R["part1"]["tests"][s]["p"])] for s in SCALES], "Part 1 MOS with 95% CI")
+                  ["scale", "reference", "test", "participants", "clip_pairs", "median_diff", "median_ci_lo", "median_ci_hi",
+                   "mean_diff", "W", "p", "p_holm_within_scale", "rank_biserial", "n"], csv_rows)
+        write_tex(out / "tables" / f"part1_{name}.tex", ["Scale"] + conds + ["Friedman $p$"],
+                  [[s.replace("_", " ")] + [f"{fmt(R['part1']['per_condition'][(s, c)]['mos'])}$\\pm${fmt(R['part1']['per_condition'][(s, c)]['ci95'])}"
+                                            for c in conds] + [fmt_p(R["part1"]["friedman"][s]["p"])] for s in SCALES],
+                  "Part 1 MOS with 95% CI")
 
-        L.append("\n按片段类别分层（虚拟室内 / 现实室内 / 现实室外，探索性）：\n")
+        L.append("\n次要分析（事先写明，不校正）：按片段的差值（每个片段先对被试取平均，再在片段间做双尾符号检验），"
+                 "以及只用序关系的统计量（每人后者高于前者的片段数减低于的片段数，除以片段数；被试间 Wilcoxon）：\n")
         rows = []
-        for (s, scene), t in sorted(R["part1"]["per_scene"].items()):
-            rows.append([SCALE_LABEL[s], scene or "—", str(t["n"]), fmt(t["median_diff"]), fmt_p(t["p"])])
-        L.append(md_table(["量表", "类别", "N", "差值中位数", "p（未校正）"], rows))
+        for s in SCALES:
+            for ref, test in R["part1"]["pairs"]:
+                b = R["part1"]["secondary"][(s, ref, test)]["by_clip"]
+                o = R["part1"]["secondary"][(s, ref, test)]["order_stat"]
+                rows.append([SCALE_LABEL[s].split()[0], f"{test} − {ref}", f"{b['pos']} / {b['neg']} / {b['zero']}", fmt_p(b["p"]),
+                             str(o["n"]), fmt(o["mean_diff"]), fmt(o["median_diff"]), fmt_p(o["p"])])
+        L.append(md_table(["量表", "配对", "片段数 高于 / 低于 / 相等", "符号检验 p", "序关系统计量 N", "均值", "中位数", "Wilcoxon p"], rows))
+
+        L.append("\n按片段类别（cell）分层（描述，p 未校正）：\n")
+        rows = []
+        for (s, ref, test, scene), t in sorted(R["part1"]["per_scene"].items()):
+            rows.append([SCALE_LABEL[s].split()[0], f"{test} − {ref}", scene or "—", str(t["n"]), fmt(t["median_diff"]), fmt_p(t["p"])])
+        L.append(md_table(["量表", "配对", "类别", "N", "差值中位数", "p（未校正）"], rows))
 
         L.append("\n逐片段 MOS：\n")
         clips = sorted({k[1] for k in R["part1"]["per_clip"]})
@@ -960,24 +1127,45 @@ def run(args) -> int:
 
         P2 = R["part2"]
         L.append(f"\n### 2.2 第二部分：{c_pa} 对 {c_paw}\n")
-        dm = P2["dprime_mean_ci"]
-        t1, t2, t3 = P2["dprime_test"], P2["pref_test"], P2["pref_test_diff_only"]
-        L.append(md_table(["指标", "N", "均值 ± 95% CI / 中位数", "W", "p", "r"], [
-            ["d′（能否分辨）", str(t1["n"]), f"{fmt(dm[0])} ± {fmt(dm[2])} / {fmt(t1['median_diff'])}", fmt(t1["W"], 1), fmt_p(t1["p"]), fmt(t1["rank_biserial"])],
-            ["偏好（答“没有区别”计 0，正值偏向 pose-aware）", str(t2["n"]), f"{fmt(t2['mean_diff'])} / {fmt(t2['median_diff'])}", fmt(t2["W"], 1), fmt_p(t2["p"]), fmt(t2["rank_biserial"])],
-            ["偏好（只用答“有区别”的试次）", str(t3["n"]), f"{fmt(t3['mean_diff'])} / {fmt(t3['median_diff'])}", fmt(t3["W"], 1), fmt_p(t3["p"]), fmt(t3["rank_biserial"])],
+        ht, hci, fci, hfci = P2["hf_test"], P2["H_mean_ci"], P2["F_mean_ci"], P2["HF_mean_ci"]
+        ci = lambda c: f"{fmt(c['mean'], 3)} [{fmt(c['ci95'][0], 3)}, {fmt(c['ci95'][1], 3)}]"
+        L.append(md_table(["指标（每人一个值）", "N", "均值 [bootstrap 95% CI]", "检验", "p"], [
+            ["H：真实配对答“有区别”的比例", str(hci["n"]), ci(hci), "—", "—"],
+            ["F：相同配对答“有区别”的比例", str(fci["n"]), ci(fci), "—", "—"],
+            ["H − F（P4a，能否分辨）", str(ht["n"]), ci(hfci), f"被试内置换检验（{ht['n_perm']} 次）", fmt_p(ht["p"])],
         ]))
-        L.append("\n逐片段（d′ 为全体被试合并计数）：\n")
-        rows = [[clip, fmt(v["H"]), fmt(v["F"]), fmt(v["pooled_dprime"]), f"{fmt(v['pref_mean'])} ± {fmt(v['pref_ci95'])}"]
+        dl = P2["dprime_loglinear_mean_ci"]
+        L.append(f"\n描述（不作检验）：z(H) − z(F)，对数线性校正 H = (命中 + 0.5)/(真实配对数 + 1)、F 同理；"
+                 f"均值 {fmt(dl[0])} ± {fmt(dl[2])}（N {dl[3]}）。这是“是–否”任务的公式，不等于同–异任务中两种渲染之间的 d′。\n")
+        t2, t3, g4b = P2["pref_test"], P2["pref_test_diff_only"], R["p4b"]
+        if g4b["requires"] is None:
+            status = f"P4b 不设前提，按 α = {g4b['alpha']} 检验"
+        elif g4b["gate_met"] is None:
+            status = f"{g4b['requires']} 无法检验，P4b 未检验，只报数"
+        elif g4b["gate_met"]:
+            status = f"{g4b['requires']} 显著（α = {g4b['alpha']}），P4b 按 α = {g4b['alpha']} 检验"
+        else:
+            status = f"{g4b['requires']} 不显著，P4b 不检验，只报数（下表 p 仅供参考）"
+        L.append(f"偏好（P4b）：{status}。实际进入 Wilcoxon 检验的人数为差值不为 0 的被试数（从未在真实配对上答“有区别”的被试偏好为 0，被丢弃）。\n")
+        n_nz = lambda t: sum(1 for v in P2["per_participant"].values() if not math.isnan(v[t]) and v[t] != 0)
+        L.append(md_table(["指标", "N", "非零 N", "均值 / 中位数", "W", "p", "r"], [
+            ["偏好（答“没有区别”计 0，正值偏向 pose-aware）", str(t2["n"]), str(n_nz("pref_mean")), f"{fmt(t2['mean_diff'])} / {fmt(t2['median_diff'])}",
+             fmt(t2["W"], 1), fmt_p(t2["p"]), fmt(t2["rank_biserial"])],
+            ["偏好（只用答“有区别”的试次，次要）", str(t3["n"]), str(n_nz("pref_mean_diff_only")), f"{fmt(t3['mean_diff'])} / {fmt(t3['median_diff'])}",
+             fmt(t3["W"], 1), fmt_p(t3["p"]), fmt(t3["rank_biserial"])],
+        ]))
+        L.append("\n逐片段（全体被试合并计数；z(H) − z(F) 只作描述）：\n")
+        rows = [[clip, fmt(v["H"]), fmt(v["F"]), fmt(v["HF"]), fmt(v["pooled_dprime_loglinear"]), f"{fmt(v['pref_mean'])} ± {fmt(v['pref_ci95'])}"]
                 for clip, v in sorted(P2["per_clip"].items())]
-        L.append(md_table(["片段", "命中率", "虚报率", "合并 d′", "偏好均值 ± 95% CI"], rows))
+        L.append(md_table(["片段", "命中率 H", "虚报率 F", "H − F", "合并 z(H) − z(F)", "偏好均值 ± 95% CI"], rows))
         BT = R["part2_by_theta"]
         if BT:
             L.append("\n按 PAw 修正半径 θ 分组（描述性，不做检验；θ 由自然注视范围测量按暂定规则选定）：\n")
-            rows = [[("—" if math.isnan(t) else f"{t:g}°"), str(v["n"]), fmt(v["hit_rate"]), fmt(v["fa_rate"]), fmt(v["dprime_mean"]),
-                     fmt(v["pref_mean"]), fmt(v["pref_mean_diff_only"])]
+            rows = [[("—" if math.isnan(t) else f"{t:g}°"), str(v["n"]), fmt(v["H_mean"]), fmt(v["F_mean"]), fmt(v["HF_mean"]),
+                     fmt(v["dprime_mean"]), fmt(v["pref_mean"]), fmt(v["pref_mean_diff_only"])]
                     for t, v in sorted(BT.items(), key=lambda kv: (math.isnan(kv[0]), kv[0]))]
-            L.append(md_table(["θ", "人数", "命中率（合并）", "虚报率（合并）", "d′ 均值", "偏好均值（无区别计 0）", "偏好均值（只用有区别）"], rows))
+            L.append(md_table(["θ", "人数", "H 均值", "F 均值", "H − F 均值", "z(H) − z(F) 均值（描述）", "偏好均值（无区别计 0）",
+                               "偏好均值（只用有区别）"], rows))
 
         SQ = R["ssq"]
         L.append("\n### 2.3 SSQ（P.919 §7.2.1）\n")
@@ -995,11 +1183,28 @@ def run(args) -> int:
         L.append(md_table(["差值（TS）", "N", "中位数", "均值"], rows))
         t = SQ["contrasts"].get((primary[0], primary[1], "TS"))
         if t:
-            L.append(f"\n主要比较组中的 SSQ 对比 {primary[0]} → {primary[1]}（TS）：N {t['n']}，差值中位数 {fmt(t['median_diff'], 1)}，p {fmt_p(t['p'])}（未校正；Holm 见 2.4）。")
+            L.append(f"\n{primary[1]} − {primary[0]}（TS，只报数）：N {t['n']}，中位数 {fmt(t['median_diff'], 1)}，均值 {fmt(t['mean_diff'], 1)}。")
 
-        L.append("\n### 2.4 主要比较组（Holm 校正）\n")
-        rows = [[k, fmt_p(R["family_p"][k]), fmt_p(R["family_holm"][k])] for k in R["family_p"]]
-        L.append(md_table(["比较", "p", "Holm 校正 p"], rows))
+        L.append("\n### 2.4 正式检验汇总\n")
+        short = {"depth_quality": "立体感", "visual_comfort": "舒适度", "artifact_annoyance": "瑕疵"}
+        rows = []
+        for s in SCALES:
+            fr = R["part1"]["friedman"][s]
+            rows.append([f"第一部分 {short[s]}：Friedman", fmt_p(fr["p"]), "—", "—"])
+            for ref, test in R["part1"]["pairs"]:
+                h = R["part1"]["holm"][(s, ref, test)]
+                rows.append([f"第一部分 {short[s]}：{test} − {ref}", fmt_p(R["part1"]["pairwise"][(s, ref, test)]["p"]), fmt_p(h),
+                             "—" if math.isnan(h) else ("拒绝" if h < alpha else "不拒绝")])
+        a4 = R["p4a"]
+        rows.append(["第二部分 P4a：H − F（置换检验，单独检验）", fmt_p(a4["p"]), "—",
+                     "—" if a4["reject"] is None else ("拒绝" if a4["reject"] else "不拒绝")])
+        g4b = R["p4b"]
+        if g4b["tested"]:
+            rows.append([f"第二部分 P4b：偏好（以 {g4b['requires'] or '无'} 为前提）", fmt_p(g4b["p"]), "—",
+                         "拒绝" if g4b["p"] < g4b["alpha"] else "不拒绝"])
+        else:
+            rows.append([f"第二部分 P4b：偏好（以 {g4b['requires']} 为前提）", "—", "—", "未检验，只报数"])
+        L.append(md_table(["检验", "p", "Holm 校正 p（本项评分内）", f"α = {alpha}"], rows))
         L.append("")
 
     L.append("## 3. 依从性、观看时长与播放\n")

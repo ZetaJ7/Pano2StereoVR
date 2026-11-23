@@ -172,3 +172,11 @@ Stimuli/
 - 第二部分的 Replica 两段放在配置列表的最后，每位被试的两种相同配对在 Blender 与 Replica 内各自平衡。
 - 未使用但保留在 `Stimuli/` 中的片段：bin_B、bnear_C、bnear_E、btrain_near，以及 Replica 的 vin_B、dummy_indoor、train_indoor、near_A、near_D–F、train_near。
 - 预实验用的刺激只含清单引用的 92 个文件，放在本机 `D:\WorkSpace\E5_pilot_20261123\Stimuli\`（`SHA256SUMS`、`files.txt` 在其上一级）。
+
+### 12.1 实验版本（用户 11-23 决定：实验按此版本开始）
+
+- 程序、配置与清单：提交 `bb1755e`（分支 `feature/subjective-study`）。配置 `StudyTools/study_config.example.json`，`config_version` = `v4-draft-2026-11-22`，sha256 `7b9f621554aa9462feab8198db3b7d4d7013b4357b6280b433396734c77b1487`（与每份清单的 `config_sha256` 相同），清单格式 5。
+- 被试编号：预实验 T01–T05（`StudyTools/plans_pilot`），正式 P01–P40（`StudyTools/plans`）。AP01 只用于桌面自动检查。
+- 刺激：92 个文件，`D:\WorkSpace\E5_pilot_20261123\Stimuli\`，复制到实验电脑的 `<项目根目录>\Stimuli\`。清单 `SHA256SUMS` 的 sha256 为 `c9e423fb70ff6a4b719d1d5cf5082f6928b1f51be6172c3b30a3563ded604c27`。
+- 全部立体内容按 IPD 0.063 m 生成（Ours、DeepSynthesis V1V2、MotionParallax 的运行记录均已核对）；Mono 两眼同图。
+- 之后若更换片段、配置或清单，须另起版本号并在此记录。

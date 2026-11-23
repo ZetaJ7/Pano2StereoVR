@@ -87,6 +87,11 @@ namespace Pano2StereoVR.Study
         private readonly List<Button> _endButtons = new List<Button>();
         private RectTransform _exitConfirmRow;
         private bool _restarting;
+        // continuing an interrupted formal session (StudyResume; user 2026-11-23)
+        private ResumeCandidate _resume;
+        private string _resumeChoice = "";   // "", "continue" or "restart"
+        private int _resumeStart;            // flow index the session starts at (0 = from the beginning)
+        private RectTransform _resumeBox;
         private bool _advanceArmed;
         private bool _advanceRequested;
         private int _triggerSeen;
@@ -820,7 +825,18 @@ namespace Pano2StereoVR.Study
             yield return LanguageStep();
             yield return Checkin();
             List<FlowStep> flow = _s.Plan.Flow;
-            for (int si = 0; si < flow.Count; si++)
+            int first = Mathf.Clamp(_resumeStart, 0, flow.Count);
+            _resumeStart = 0;
+            if (first > 0 && first < flow.Count && StudyResume.NeedsHeadset(flow[first].Kind)
+                && flow.Take(first).Any(f => f.Kind == FlowStepKind.HmdFit))
+            {
+                // continued session starting at a headset step: fit and recenter the headset first
+                _s.Step = "resume_hmd_fit";
+                LogEvent("resume_hmd_fit_start", "");
+                yield return HmdFitStep();
+                LogEvent("resume_hmd_fit_end", "");
+            }
+            for (int si = first; si < flow.Count; si++)
             {
                 FlowStep step = flow[si];
                 _s.Step = step.ToString();
@@ -908,6 +924,9 @@ namespace Pano2StereoVR.Study
             bool started = false;
             bool reminder = false;
             bool paperForms = false;
+            _resume = null;
+            _resumeChoice = "";
+            _resumeStart = 0;
             ShowGray();
             ShowHmdNotice("hmd_wait", null);
 
@@ -932,6 +951,13 @@ namespace Pano2StereoVR.Study
             Text status = null;
             _ui.NewButton(row, T("checkin_load"), 24, () => TryLoadPlan(pid.text.Trim(), status), 220, 52, ButtonKind.Secondary, "Btn_Load");
             status = _ui.Secondary(c, "", TextAnchor.UpperLeft, 20);
+            _resumeBox = StudyUi.NewRect("ResumeBox", c);
+            var resumeLayout = _resumeBox.gameObject.AddComponent<VerticalLayoutGroup>();
+            resumeLayout.spacing = 8;
+            resumeLayout.childControlWidth = true;
+            resumeLayout.childControlHeight = true;
+            resumeLayout.childForceExpandWidth = false;
+            resumeLayout.childForceExpandHeight = false;
             _ui.Spacer(c, 6);
             _ui.NewToggle(c, T("checkin_reminder"), 22, v => reminder = v, "Toggle_Reminder");
             _ui.NewToggle(c, T("checkin_paper_forms"), 22, v => paperForms = v, "Toggle_PaperForms");
@@ -945,7 +971,8 @@ namespace Pano2StereoVR.Study
 
             while (!started)
             {
-                start.interactable = _s.Plan != null && reminder && paperForms && (_settings.IsQa || _s.MissingStimuli.Count == 0);
+                start.interactable = _s.Plan != null && reminder && paperForms && (_settings.IsQa || _s.MissingStimuli.Count == 0)
+                                     && (_resume == null || _resumeChoice == "restart" || (_resumeChoice == "continue" && !_resume.Complete));
                 yield return null;
             }
             StartLogging(reminder, paperForms);
@@ -975,7 +1002,24 @@ namespace Pano2StereoVR.Study
                 List<string> files = plan.AllStimulusFiles().ToList();
                 _s.MissingStimuli.Clear();
                 _s.MissingStimuli.AddRange(StudyDataLogger.MissingStimuli(_settings.StimuliDir, files));
-                _s.SessionDir = StudyDataLogger.NewSessionDirectory(_settings.DataDir, participantId, DateTime.UtcNow, out bool existed);
+                // formal data of this ID already present: ask whether to continue or restart (StudyResume, user 2026-11-23)
+                _resume = null;
+                _resumeChoice = "";
+                ClearResumeBox();
+                if (!_settings.IsQa)
+                {
+                    _resume = StudyResume.Find(_settings.DataDir, participantId, plan.Flow.Select(f => f.ToString()).ToList());
+                }
+                bool existed;
+                if (_resume != null)
+                {
+                    _s.SessionDir = _resume.Directory;
+                    existed = true;
+                }
+                else
+                {
+                    _s.SessionDir = StudyDataLogger.NewSessionDirectory(_settings.DataDir, participantId, DateTime.UtcNow, out existed);
+                }
                 _s.SessionDirExisted = existed;
                 var lines = new List<string> { StudyTheme.Tint(TF("checkin_loaded", participantId), StudyTheme.Light.Success, true) };
                 if (_s.MissingStimuli.Count > 0)
@@ -985,11 +1029,17 @@ namespace Pano2StereoVR.Study
                         : StudyTheme.Tint(TF("checkin_missing_blocked", _s.MissingStimuli.Count), err, true));
                     Debug.LogWarning("[Study] missing stimuli under " + _settings.StimuliDir + ":\n" + string.Join("\n", _s.MissingStimuli));
                 }
-                if (existed)
+                if (existed && _resume == null)
                 {
                     lines.Add(StudyTheme.Tint(T("checkin_existing_data"), warn));
                 }
                 status.text = string.Join("\n", lines);
+                if (_resume != null)
+                {
+                    BuildResumeChoice();
+                    LogEvent("resume_offered", _resume.Directory + " status=" + _resume.Status + " step=" + _resume.StartIndex + " "
+                        + _resume.StartStep + (_resume.Complete ? " (complete)" : ""));
+                }
                 LogEvent("plan_loaded", path + " sha256=" + _s.PlanSha256);
                 if (_s.MissingStimuli.Count > 0)
                 {
@@ -1000,9 +1050,60 @@ namespace Pano2StereoVR.Study
             catch (Exception e)
             {
                 _s.Plan = null;
+                _resume = null;
+                _resumeChoice = "";
+                ClearResumeBox();
                 status.text = StudyTheme.Tint(TF("checkin_load_failed", e.Message), err, true);
                 LogEvent("plan_load_failed", path + ": " + e.Message);
             }
+        }
+
+        private void ClearResumeBox()
+        {
+            if (_resumeBox == null)
+            {
+                return;
+            }
+            for (int i = _resumeBox.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = _resumeBox.GetChild(i).gameObject;
+                child.SetActive(false);
+                Destroy(child);
+            }
+        }
+
+        /// <summary>Check-in choice when the ID already has formal data: continue from the interrupted step, or restart.</summary>
+        private void BuildResumeChoice()
+        {
+            if (_resumeBox == null || _resume == null || _s.Plan == null)
+            {
+                return;
+            }
+            ResumeCandidate r = _resume;
+            string folder = Path.GetFileName(r.Directory);
+            string msg = r.Complete
+                ? TF("checkin_resume_complete", folder)
+                : TF("checkin_resume_found", folder, r.StartIndex + 1, _s.Plan.Flow.Count, r.StartStep, r.Status);
+            _ui.Secondary(_resumeBox, StudyTheme.Tint(msg, StudyTheme.Light.Warning, true), TextAnchor.UpperLeft, 20);
+            RectTransform row = _ui.NewRow(_resumeBox, 16, TextAnchor.MiddleLeft, 56);
+            Text chosen = null;
+            if (!r.Complete)
+            {
+                _ui.NewButton(row, T("checkin_resume_continue"), 22, () =>
+                {
+                    _resumeChoice = "continue";
+                    chosen.text = TF("checkin_resume_chosen_continue", r.StartIndex + 1, r.StartStep);
+                    LogEvent("resume_choice", "continue");
+                }, 320, 52, ButtonKind.Primary, "Btn_ResumeContinue");
+            }
+            _ui.NewButton(row, T("checkin_resume_restart"), 22, () =>
+            {
+                _resumeChoice = "restart";
+                chosen.text = StudyTheme.Tint(TF("checkin_resume_chosen_restart", _s.Plan.ParticipantId), StudyTheme.Light.Error, true);
+                LogEvent("resume_choice", "restart");
+            }, 400, 52, ButtonKind.Danger, "Btn_ResumeRestart");
+            chosen = _ui.Secondary(_resumeBox, T(r.Complete ? "checkin_resume_question_complete" : "checkin_resume_question"),
+                TextAnchor.UpperLeft, 20);
         }
 
         private Dictionary<string, object> PlanSummary(List<string> files)
@@ -1059,7 +1160,69 @@ namespace Pano2StereoVR.Study
         private void StartLogging(bool reminder, bool paperForms)
         {
             StudyPlan plan = _s.Plan;
+            var replaced = new List<object>();
+            var replacedMoves = new List<KeyValuePair<string, string>>();
+            if (_resume != null && _resumeChoice == "continue" && !_resume.Complete)
+            {
+                try
+                {
+                    StartLoggingResume(reminder, paperForms);
+                    return;
+                }
+                catch (Exception e)
+                {
+                    // nothing was rewritten unless the archive step finished; start a fresh time-stamped folder instead
+                    Debug.LogError("[Study] resume failed: " + e);
+                    LogEvent("resume_failed", e.Message + "; starting a new time-stamped folder from the beginning");
+                    _s.Log = null;
+                    _s.Events = null;
+                    _s.Session.Clear();
+                    _resumeStart = 0;
+                    _resume = null;
+                    _s.SessionDir = StudyDataLogger.NewSessionDirectory(_settings.DataDir, plan.ParticipantId, DateTime.UtcNow, out bool ex1);
+                    _s.SessionDirExisted = ex1;
+                }
+            }
+            if (_resume != null && _resumeChoice == "restart")
+            {
+                // restart: the earlier formal folders of this ID leave the data folder (kept under the backup folder)
+                try
+                {
+                    foreach (string d in StudyResume.FormalSessionDirs(_settings.DataDir, plan.ParticipantId))
+                    {
+                        string moved = StudyResume.MoveToReplaced(d, _settings.BackupDir, _settings.DataDir, DateTime.UtcNow, plan.ParticipantId);
+                        replaced.Add(new Dictionary<string, object> { { "from", d }, { "to", moved } });
+                        replacedMoves.Add(new KeyValuePair<string, string>(d, moved));
+                        LogEvent("replaced_moved", d + " -> " + moved);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[Study] moving the earlier folder failed: " + e);
+                    LogEvent("replaced_move_failed", e.Message + "; the earlier folder stays, this session uses a new time-stamped folder");
+                }
+                _s.SessionDir = StudyDataLogger.NewSessionDirectory(_settings.DataDir, plan.ParticipantId, DateTime.UtcNow, out bool existedNow);
+                _s.SessionDirExisted = existedNow;
+                _resume = null;
+            }
             _s.Log = new StudyDataLogger(_s.SessionDir, plan.ParticipantId);
+            if (replacedMoves.Count > 0)
+            {
+                // notes in both places: where the old data went, and which new folder replaced them
+                try
+                {
+                    DateTime t = DateTime.UtcNow;
+                    StudyResume.WritePreviousMovedNote(_s.SessionDir, replacedMoves, t);
+                    foreach (KeyValuePair<string, string> m in replacedMoves)
+                    {
+                        StudyResume.WriteReplacedNote(m.Value, m.Key, plan.ParticipantId, t, _s.SessionDir);
+                    }
+                }
+                catch (Exception e)
+                {
+                    LogEvent("replaced_note_failed", e.Message);
+                }
+            }
             _s.Events = new CsvLog(Path.Combine(_s.SessionDir, "events.csv"), new[] { "t_utc", "event", "detail" });
             foreach (string d in _s.DeferredEvents)
             {
@@ -1107,6 +1270,10 @@ namespace Pano2StereoVR.Study
             s["start_utc"] = now;
             s["end_utc"] = "";
             s["plan_summary"] = PlanSummary(files);
+            if (replaced.Count > 0)
+            {
+                s["replaced_previous"] = replaced;
+            }
             WriteSession();
             LogEvent("session_start", _s.SessionDir);
             LogEvent("plan_summary", MiniJson.Serialize(s["plan_summary"], false));
@@ -1116,6 +1283,92 @@ namespace Pano2StereoVR.Study
             }
             LogEvent("paths", "plans=" + _settings.PlansDir + " stimuli=" + _settings.StimuliDir + " data=" + _settings.DataDir
                 + " backup=" + _settings.BackupDir + " settings=" + _settings.Source);
+            _s.SessionStartRealtime = Time.realtimeSinceStartup;
+        }
+
+        /// <summary>
+        /// Continue the interrupted formal session in its own folder (StudyResume, user 2026-11-23): the rows written by the
+        /// interrupted step and any later step go to a superseded_* subfolder, session.json keeps its content and gains a
+        /// "resumes" entry, and the flow restarts at the first step that had not ended. The plan is the same file, so the
+        /// trial order and the stimuli do not change.
+        /// </summary>
+        private void StartLoggingResume(bool reminder, bool paperForms)
+        {
+            StudyPlan plan = _s.Plan;
+            ResumeCandidate r = _resume;
+            DateTime nowDt = DateTime.UtcNow;
+            string archive = StudyResume.ArchiveFromStep(r.Directory, plan.Flow, r.StartIndex, nowDt);
+            _s.SessionDir = r.Directory;
+            _s.Log = new StudyDataLogger(_s.SessionDir, plan.ParticipantId);
+            _s.Events = new CsvLog(Path.Combine(_s.SessionDir, "events.csv"), new[] { "t_utc", "event", "detail" });
+            foreach (string d in _s.DeferredEvents)
+            {
+                string[] f = d.Split(new[] { '\t' }, 3);
+                _s.Events.Append(f[0], f[1], f.Length > 2 ? f[2] : "");
+            }
+            _s.DeferredEvents.Clear();
+            string now = UtcNow();
+            Dictionary<string, object> s = _s.Session;
+            s.Clear();
+            foreach (KeyValuePair<string, object> kv in r.Session)
+            {
+                s[kv.Key] = kv.Value;
+            }
+            List<object> resumes = s.TryGetValue("resumes", out object ro) && ro is List<object> rl ? rl : new List<object>();
+            resumes.Add(new Dictionary<string, object>
+            {
+                { "utc", now },
+                { "from_step_index", r.StartIndex },
+                { "from_step", r.StartStep },
+                { "previous_status", r.Status },
+                { "previous_abort_reason", MiniJson.GetString(r.Session, "abort_reason", "") },
+                { "superseded_dir", string.IsNullOrEmpty(archive) ? "" : Path.GetFileName(archive) },
+                { "verbal_reminder_given", reminder },
+                { "paper_forms_confirmed", paperForms },
+                { "language", _s.Language },
+                { "app_version", AppVersion + " (Unity " + Application.unityVersion + ")" },
+                { "plan_file_sha256", _s.PlanSha256 },
+            });
+            s["resumes"] = resumes;
+            s["status"] = "in_progress";
+            s["abort_reason"] = "";
+            s["end_utc"] = "";
+            _s.Log.WriteJson("checkin_resume_" + resumes.Count.ToString(CultureInfo.InvariantCulture) + ".json", new Dictionary<string, object>
+            {
+                { "participant_id", plan.ParticipantId },
+                { "verbal_reminder_given", reminder },
+                { "paper_forms_confirmed", paperForms },
+                { "language", _s.Language },
+                { "mode", _settings.Mode },
+                { "timestamp_utc", now },
+                { "resume_from_step_index", r.StartIndex },
+                { "resume_from_step", r.StartStep },
+            });
+            WriteSession();
+            LogEvent("session_resume", _s.SessionDir + " previous status " + r.Status);
+            LogEvent(StudyResume.ResumeEvent, r.StartIndex.ToString(CultureInfo.InvariantCulture) + " " + r.StartStep);
+            if (!string.IsNullOrEmpty(archive))
+            {
+                LogEvent("superseded", archive);
+            }
+            if (_s.PlanSha256 != MiniJson.GetString(r.Session, "plan_file_sha256", _s.PlanSha256))
+            {
+                LogEvent("resume_plan_changed", "plan sha256 " + _s.PlanSha256 + " differs from the session's "
+                    + MiniJson.GetString(r.Session, "plan_file_sha256", ""));
+            }
+            // the PAw radius chosen by an earlier natural viewing range measurement stays in use
+            int er = plan.Flow.FindIndex(f => f.Kind == FlowStepKind.EyeRange);
+            if (er >= 0 && er < r.StartIndex && s.TryGetValue("eye_range", out object eo) && eo is Dictionary<string, object> erd)
+            {
+                double theta = MiniJson.GetNumber(erd, "chosen_paw_theta_deg", -1.0);
+                if (theta > 0)
+                {
+                    _s.PawThetaDeg = (float)theta;
+                    _s.PawThetaSource = MiniJson.GetString(erd, "paw_theta_source", "measured");
+                    LogEvent("resume_paw_theta", theta.ToString("0.###", CultureInfo.InvariantCulture) + " " + _s.PawThetaSource);
+                }
+            }
+            _resumeStart = r.StartIndex;
             _s.SessionStartRealtime = Time.realtimeSinceStartup;
         }
 

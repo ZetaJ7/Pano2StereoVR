@@ -1378,7 +1378,7 @@ namespace Pano2StereoVR.Study
                 }
                 yield return _clips.WaitPrepared(s, PrepareTimeoutSeconds);
                 yield return AlignToReference(DisplayYaw(t), t.ReferencePitchDeg,
-                    (t.IsMain ? "" : StudyMarkup.Em(T("practice_label")) + "  ") + StudyMarkup.Em(T(labelKey)) + "  " + T("part2_cue"),
+                    StudyMarkup.Em(_part2Progress) + "  " + StudyMarkup.Em(T(labelKey)) + "  " + T("part2_cue"),
                     -0.42f, (a, d) => { });
                 if (Interrupted)
                 {
@@ -1423,10 +1423,23 @@ namespace Pano2StereoVR.Study
             }
             StudyClipPlayer.Slot slotA = _clips.Prepare(0, StimulusPath(Part2File(trials[0].FileA)));
             StudyClipPlayer.Slot slotB = _clips.Prepare(1, StimulusPath(Part2File(trials[0].FileB)));
+            // user 11-24: progress shown to the participant ("[Practice k of n]", then "Group k of n" as in Part 1),
+            // in the alignment cues and the gap notice; playback itself stays free of text
+            int nPractice = trials.Count(x => !x.IsMain), nMain = trials.Count(x => x.IsMain);
+            int practiceNo = 0, mainNo = 0;
 
             for (int i = 0; i < trials.Count; i++)
             {
                 StudyTrial t = trials[i];
+                if (t.IsMain)
+                {
+                    mainNo++;
+                }
+                else
+                {
+                    practiceNo++;
+                }
+                _part2Progress = t.IsMain ? TF("group_title", mainNo, nMain) : TF("part2_progress_practice", practiceNo, nPractice);
                 if (_skipPart)
                 {
                     WritePart2Row(t, "", "", "", "", null, null, 0f, 0f, "", "", 0, 0, false, false, true, "qa");
@@ -1452,7 +1465,7 @@ namespace Pano2StereoVR.Study
                 _recenterLocked = true; // user 11-19: no manual recenter from the alignment to the end of the second clip
                 float alignS = 0f, startDev = 0f;
                 yield return AlignToReference(DisplayYaw(t), t.ReferencePitchDeg,
-                    (t.IsMain ? "" : StudyMarkup.Em(T("practice_label")) + "  ") + StudyMarkup.Em(T("segment_first")) + "  " + T("part2_cue"),
+                    StudyMarkup.Em(_part2Progress) + "  " + StudyMarkup.Em(T("segment_first")) + "  " + T("part2_cue"),
                     -0.42f, (a, d) => { alignS = a; startDev = d; });
                 bool playedA = false, playedB = false;
                 var segA = new Part2Segment();
@@ -1463,7 +1476,7 @@ namespace Pano2StereoVR.Study
                     statsA = segA.Stats;
                     maxA = segA.MaxDeg;
                     playedA = true;
-                    ShowHmdNotice("segment_second", null); // user 11-19: clip labels appear only outside playback
+                    ShowHmdNoticeText(T("segment_second"), _part2Progress); // user 11-19: clip labels appear only outside playback
                     yield return Wait(tm.GapBetweenAbSeconds);
                     _ui.ShowHmd(false);
                 }
@@ -2036,10 +2049,16 @@ namespace Pano2StereoVR.Study
         /// <summary>Headset message without buttons: a large accent title and an optional short line.</summary>
         private void ShowHmdNotice(string titleKey, string bodyKey)
         {
+            ShowHmdNoticeText(T(titleKey), string.IsNullOrEmpty(bodyKey) ? null : T(bodyKey));
+        }
+
+        /// <summary>Same as <see cref="ShowHmdNotice"/> with ready texts (e.g. "Second clip" and the Part 2 progress).</summary>
+        private void ShowHmdNoticeText(string title, string body)
+        {
             _ui.ClearHmd();
             _ui.SetHmdSize(1600, 600);
             _ui.PlaceHmdCanvas(_rig.HeadPosition, _panelAnchor, PanelDistance); // user 11-20: fixed content direction, not the head
-            _ui.Notice(_ui.HmdContent, T(titleKey), string.IsNullOrEmpty(bodyKey) ? null : T(bodyKey));
+            _ui.Notice(_ui.HmdContent, title, body);
         }
 
         private IEnumerator AskYesNo(string questionKey, Action<int> result, Action<float> rt)

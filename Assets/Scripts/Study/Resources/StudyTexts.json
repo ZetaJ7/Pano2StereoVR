@@ -170,6 +170,7 @@
     {"key": "part1_title", "zh": "画面评分", "en": "Rating"},
     {"key": "part1_intro", "zh": "每组是同一个场景的几段画面，依次播放，可以**自由转头**观看。\n· 每段看完后回答三个问题：**立体感**、**观看舒适度**、**画面瑕疵**\n· 一组看完后可以**回放**任一段，并**修改评分**\n· 画面本身在移动时，建议**少做主动转头**探索，以免头晕\n· 先做练习", "en": "Each group shows several clips of the same scene, one after another; **look around freely**.\n· After each clip answer three questions: **sense of depth**, **viewing comfort** and **visual artifacts**\n· After a group you can **replay** any clip and **change its ratings**\n· When the picture itself is moving, **turn your head less** to avoid dizziness\n· A practice comes first"},
     {"key": "group_title", "zh": "第 {0} / {1} 组", "en": "Group {0} of {1}"},
+    {"key": "part2_progress_practice", "zh": "【练习 {0} / {1}】", "en": "[Practice {0} of {1}]"},
     {"key": "group_intro", "zh": "新的场景", "en": "A new scene"},
     {"key": "stereo_done_title", "zh": "非常好！", "en": "Well done!"},
     {"key": "stereo_done", "zh": "下面进入实验内容环节。", "en": "The main part of the study starts next."},

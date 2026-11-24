@@ -45,6 +45,8 @@ namespace Pano2StereoVR.Study
         private GameObject _cueMarker;
         /// <summary>Head-direction arrow next to the orientation cross (user 2026-11-24, <see cref="StudyAlignHint"/>).</summary>
         private GameObject _alignHint;
+        /// <summary>Participant-facing Part 2 progress of the current trial (user 2026-11-24), e.g. "Group 3 of 18".</summary>
+        private string _part2Progress = "";
         private Material _hintMat;
         private GameObject _gazeRoot;
         private readonly List<Renderer> _gazeDots = new List<Renderer>();

@@ -43,6 +43,9 @@ namespace Pano2StereoVR.Study
         private GameObject _rdsQuad;
         private Texture2D _rdsTex;
         private GameObject _cueMarker;
+        /// <summary>Head-direction arrow next to the orientation cross (user 2026-11-24, <see cref="StudyAlignHint"/>).</summary>
+        private GameObject _alignHint;
+        private Material _hintMat;
         private GameObject _gazeRoot;
         private readonly List<Renderer> _gazeDots = new List<Renderer>();
         private GameObject _eyeTarget;
@@ -62,6 +65,11 @@ namespace Pano2StereoVR.Study
         private float _staffOpenedAt;
         private int _resumeInputFrame = -1;
         private bool _eventSystemWasEnabled = true;
+        /// <summary>
+        /// The event system disabled by <see cref="SuspendInput"/> (2026-11-24 fix). A disabled EventSystem leaves the
+        /// static list behind EventSystem.current, so the resume must re-enable this object rather than look it up.
+        /// </summary>
+        private UnityEngine.EventSystems.EventSystem _suspendedEventSystem;
         // forward direction (user 11-20 18:50): set only by R / Shift+R, directly in the headset-fitting steps,
         // otherwise through a confirmation; never automatically
         private bool _hmdFitActive;
@@ -362,6 +370,9 @@ namespace Pano2StereoVR.Study
             _ringLitMat.SetColor("_Color", StudyTheme.RingLit);
             _cueMarker = Track(BuildCueMarker());
             _cueMarker.SetActive(false);
+            _hintMat = Track(new Material(ColorShader));
+            _hintMat.SetColor("_Color", StudyTheme.CueYellow);
+            _alignHint = Track(StudyAlignHint.Build(_hintMat));
 
             _rdsQuad = Track(GameObject.CreatePrimitive(PrimitiveType.Quad));
             _rdsQuad.name = "StereoTestQuad";
@@ -463,6 +474,8 @@ namespace Pano2StereoVR.Study
             _rdsQuad = null;
             _rdsTex = null;
             _cueMarker = null;
+            _alignHint = null;
+            _hintMat = null;
             _gazeRoot = null;
             _eyeTarget = null;
             _eyeTargetMat = null;
@@ -473,6 +486,7 @@ namespace Pano2StereoVR.Study
             _staffScope = false;
             _staffPanel = null;
             _staffWait = null;
+            RestoreEventSystem(); // a restart while a staff confirmation was open must not leave the mouse dead
             _resumeInputFrame = -1;
             _hmdFitActive = false;
             _forwardSetInStep = false;
@@ -756,23 +770,40 @@ namespace Pano2StereoVR.Study
                     _triggerSeen = _pointer.TriggerPresses;
                 }
             }
-            UnityEngine.EventSystems.EventSystem es = UnityEngine.EventSystems.EventSystem.current;
-            if (es != null)
+            if (suspend)
             {
-                if (suspend)
+                // 2026-11-24 fix: keep the disabled object itself. Before, the resume looked up EventSystem.current,
+                // which is null while the only event system is disabled, so it was never re-enabled and desktop
+                // mouse clicks stayed dead after any staff confirmation (emergency recenter R + Y, F8 skip); the
+                // controller pointer kept working because it raycasts by itself (P02 on 11-23 stopped at S_mid1).
+                UnityEngine.EventSystems.EventSystem es = UnityEngine.EventSystems.EventSystem.current;
+                if (es == null)
                 {
+                    es = FindObjectOfType<UnityEngine.EventSystems.EventSystem>();
+                }
+                if (es != null && _suspendedEventSystem == null)
+                {
+                    _suspendedEventSystem = es;
                     _eventSystemWasEnabled = es.enabled;
                     es.enabled = false;
                 }
-                else
-                {
-                    es.enabled = _eventSystemWasEnabled;
-                }
             }
-            if (!suspend)
+            else
             {
+                RestoreEventSystem();
                 _resumeInputFrame = -1;
             }
+        }
+
+        /// <summary>Re-enable the event system disabled by <see cref="SuspendInput"/>, if any (also on teardown).</summary>
+        private void RestoreEventSystem()
+        {
+            if (_suspendedEventSystem != null)
+            {
+                _suspendedEventSystem.enabled = _eventSystemWasEnabled;
+            }
+            _suspendedEventSystem = null;
+            _eventSystemWasEnabled = true;
         }
 
         /// <summary>Neutral "please wait" panel between the participant and the headset panels (own world-space canvas).</summary>

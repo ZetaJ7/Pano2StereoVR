@@ -405,6 +405,12 @@ namespace Pano2StereoVR.Study
             float t0 = Time.realtimeSinceStartup;
             float insideSince = -1f;
             float dev = 0f;
+            // user 11-24: after StudyAlignHint.DelaySeconds outside the tolerance an arrow next to the cross shows
+            // which way to turn the head; it disappears as soon as the head is inside the tolerance
+            Vector3 cueDir = refRot * Vector3.forward;
+            float outsideSince = t0;
+            bool hintOn = false;
+            float hintSince = 0f;
             while (!Interrupted)
             {
                 float now = Time.realtimeSinceStartup;
@@ -418,18 +424,39 @@ namespace Pano2StereoVR.Study
                 {
                     insideSince = now;
                 }
-                if (StaffDialogOpen)
+                bool dialog = StaffDialogOpen;
+                if (dialog)
                 {
                     // user 11-20: the alignment does not progress while the staff-skip confirmation is open
                     insideSince = -1f;
                     inside = false;
+                }
+                if (inside || dialog)
+                {
+                    outsideSince = now;
+                    if (hintOn)
+                    {
+                        hintOn = false;
+                        HideAlignHint();
+                    }
+                }
+                else if (now - outsideSince >= StudyAlignHint.DelaySeconds)
+                {
+                    if (!hintOn)
+                    {
+                        hintOn = true;
+                        hintSince = now;
+                        LogAlignHint(refYaw, refPitch, now - t0, dev);
+                    }
+                    PlaceAlignHint(cueDir, now - hintSince);
                 }
                 float progress = !inside ? 0f : (dwell <= 0f ? 1f : (now - insideSince) / dwell);
                 SetAlignFeedback(inside, progress);
                 if (devText != null)
                 {
                     string devLine = TF("align_deviation", dev.ToString("0.0", CultureInfo.InvariantCulture));
-                    devText.text = inside ? StudyTheme.Tint(devLine + "      " + T("align_hold"), StudyTheme.Dark.Success, true) : devLine;
+                    devText.text = inside ? StudyTheme.Tint(devLine + "      " + T("align_hold"), StudyTheme.Dark.Success, true)
+                        : (hintOn ? devLine + "      " + T("align_hint") : devLine);
                 }
                 if (inside && progress >= 1f)
                 {
@@ -437,6 +464,7 @@ namespace Pano2StereoVR.Study
                 }
                 yield return null;
             }
+            HideAlignHint();
             _aligning = false;
             SetAlignFeedback(false, 0f);
             _alignRing.SetActive(false);
@@ -951,6 +979,44 @@ namespace Pano2StereoVR.Study
             {
                 _gazeRoot.SetActive(false);
             }
+        }
+
+        /// <summary>Place the head-direction arrow for the cue direction (world) and the time since it appeared.</summary>
+        private void PlaceAlignHint(Vector3 cueDir, float shownSeconds)
+        {
+            if (_alignHint == null || _rig == null || _rig.Camera == null)
+            {
+                return;
+            }
+            Vector3 head = _rig.Camera.transform.forward;
+            if (!StudyAlignHint.Place(head, cueDir, StudyAlignHint.OffsetFromCueDeg, StudyAlignHint.MaxFromViewCentreDeg,
+                    StudyAlignHint.Bob(shownSeconds), out Vector3 dir, out Vector3 up, out _))
+            {
+                _alignHint.SetActive(false);
+                return;
+            }
+            _alignHint.transform.position = _rig.HeadPosition + dir * PanelDistance;
+            _alignHint.transform.rotation = Quaternion.LookRotation(dir, up);
+            _alignHint.SetActive(true);
+        }
+
+        private void HideAlignHint()
+        {
+            if (_alignHint != null)
+            {
+                _alignHint.SetActive(false);
+            }
+        }
+
+        /// <summary>events.csv: when the arrow appeared, the deviation and where the cue was relative to the head.</summary>
+        private void LogAlignHint(float refYaw, float refPitch, float afterSeconds, float devDeg)
+        {
+            _rig.HeadAngles(out float headYaw, out float headPitch, out _);
+            float dYaw = StudyRig.WrapDegrees(refYaw - headYaw);
+            float dPitch = refPitch - headPitch;
+            LogEvent("align_hint", string.Format(CultureInfo.InvariantCulture,
+                "{0} {1}: shown after {2:0.0} s; deviation {3:0.0} deg; cue at yaw {4:0.0} pitch {5:0.0} deg from the head (screen angle {6:0} deg)",
+                _s.Step, _s.TrialLabel, afterSeconds, devDeg, dYaw, dPitch, StudyAlignHint.ScreenAngleDeg(dYaw, dPitch)).Trim());
         }
 
         private void ShowCue(Vector3 refDir)

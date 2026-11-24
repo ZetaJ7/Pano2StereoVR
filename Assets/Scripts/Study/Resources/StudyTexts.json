@@ -152,6 +152,7 @@
     {"key": "part2_head_choice_continue", "zh": "继续努力调整", "en": "Keep trying"},
     {"key": "align_deviation", "zh": "偏离 {0}°", "en": "Off by {0}°"},
     {"key": "align_hold", "zh": "保持不动", "en": "Hold still"},
+    {"key": "align_hint", "zh": "请按箭头方向转头", "en": "Turn your head as the arrow shows"},
     {"key": "segment_first", "zh": "前一段", "en": "First clip"},
     {"key": "segment_second", "zh": "后一段", "en": "Second clip"},
     {"key": "advance_hint", "zh": "看清后按**扳机键**（或空格键）继续", "en": "When ready, pull the **trigger** (or press Space) to continue"},

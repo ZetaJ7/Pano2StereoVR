@@ -35,3 +35,8 @@ Assets/AssetStoreTools*
 
 # local per-machine study settings (qa mode for desktop checks)
 study_settings.json
+
+# Participant data and the local record workbook (never commit; user 2026-11-24)
+/ExpData/
+# Python bytecode
+__pycache__/
